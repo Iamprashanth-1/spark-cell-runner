@@ -29,6 +29,9 @@ const state = {
 
   // Databricks Connect validation results keyed by config signature.
   connectValidationCache: new Map(),
+
+  // Last Unity Catalog sync result (see ucSync.js): { ok, synced, failed, summary, running }.
+  lastSyncResult: undefined,
 };
 
 module.exports = state;

@@ -7,3 +7,8 @@ node_modules/
 .gitignore
 _convert_python.js
 *.vsix
+__pycache__/
+examples/**
+spark-warehouse/
+**/__pycache__/**
+**/*.pyc

@@ -1,0 +1,12 @@
+{
+  "workbench.editorAssociations": {
+    "*.copilotmd": "vscode.markdown.preview.editor",
+    "*.mp4": "vscode.videoPreview",
+    "*.ipynb": "jupyter-notebook",
+    "*.py": "databricks-notebook-source"
+  },
+  "sparkCellRunner.openPyFilesAsNotebook": true,
+  "sparkCellRunner.connectionMode": "local",
+  "sparkCellRunner.localPool": "local",
+  "sparkCellRunner.useServerless": false
+}

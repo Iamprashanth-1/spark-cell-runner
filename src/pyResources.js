@@ -5,6 +5,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const config = require('./config');
+const poolManager = require('./poolManager');
 
 const resourceCache = new Map();
 
@@ -26,18 +27,65 @@ function getSessionDriverPath() {
   return path.join(__dirname, 'python', 'session_driver.py');
 }
 
-// Returns the bootstrap source with the DatabricksSession builder line filled
-// in from the current serverless/clusterId settings. The session compares the
-// exact text to detect bootstrap changes, so the result must be deterministic.
+// Returns the bootstrap source with the connection block filled in for the
+// current mode: a DatabricksSession builder (databricks mode) or a Spark
+// Connect session pointed at the selected local Sail pool (local mode). The
+// session compares the exact text to detect bootstrap changes, so the result
+// must be deterministic.
 async function buildBootstrapCode() {
   const configuration = config.getConfiguration();
   const template = await loadPythonResource('bootstrap.py');
 
+  const connectionBlock = configuration.connectionMode === 'local'
+    ? buildLocalConnectionBlock(configuration)
+    : buildDatabricksConnectionBlock(configuration);
+
+  return template.replace('__SCR_CONNECTION_BLOCK__', () => connectionBlock);
+}
+
+function buildDatabricksConnectionBlock(configuration) {
   const builderLine = configuration.useServerless
     ? `_dcr_builder = DatabricksSession.builder.serverless(True)`
     : `_dcr_builder = DatabricksSession.builder.clusterId(${JSON.stringify(configuration.clusterId)})`;
 
-  return template.replace('__DCR_BUILDER_LINE__', () => builderLine);
+  return [
+    'try:',
+    '    from databricks.connect import DatabricksSession',
+    `    ${builderLine}`,
+    "    spark = globals().get('spark') or __dcr_builder.getOrCreate()",
+    "    sql = globals().get('sql') or spark.sql",
+    '    try:',
+    '        from databricks.sdk import WorkspaceClient',
+    '    except Exception:',
+    '        pass',
+    'except Exception as databricks_connect_error:',
+    "    print(f'[spark-cell-runner] Databricks Connect bootstrap unavailable: {databricks_connect_error}')",
+  ].join('\n');
+}
+
+function buildLocalConnectionBlock(configuration) {
+  const pool = poolManager.getPool(configuration.localPool);
+
+  if (!pool) {
+    return (
+      "print('[spark-cell-runner] Local Spark pool bootstrap unavailable: " +
+      'no local pool is selected. Create one from the Spark Cell Runner sidebar.\')'
+    );
+  }
+
+  return [
+    'try:',
+    '    from pyspark.sql import SparkSession',
+    `    _local_spark_target = 'sc://127.0.0.1:${pool.port}'`,
+    "    spark = globals().get('spark') or SparkSession.builder.remote(_local_spark_target).getOrCreate()",
+    "    sql = globals().get('sql') or spark.sql",
+    '    try:',
+    `        spark.conf.set('spark.sql.warehouse.dir', ${JSON.stringify(pool.warehousePath)})`,
+    '    except Exception:',
+    '        pass',
+    'except Exception as databricks_connect_error:',
+    "    print(f'[spark-cell-runner] Local Spark pool bootstrap unavailable: {databricks_connect_error}')",
+  ].join('\n');
 }
 
 // Returns the runtime-data source with the current workspace path mappings,

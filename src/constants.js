@@ -17,6 +17,9 @@ const FS_MAGIC_REGEX = /^%fs\s+(.*)$/;
 const BOOTSTRAP_CONNECT_UNAVAILABLE_MARKER =
   '[spark-cell-runner] Databricks Connect bootstrap unavailable:';
 
+const BOOTSTRAP_LOCAL_POOL_UNAVAILABLE_MARKER =
+  '[spark-cell-runner] Local Spark pool bootstrap unavailable:';
+
 module.exports = {
   NOTEBOOK_HEADER,
   NOTEBOOK_TYPE,
@@ -31,4 +34,5 @@ module.exports = {
   MD_MAGIC_REGEX,
   FS_MAGIC_REGEX,
   BOOTSTRAP_CONNECT_UNAVAILABLE_MARKER,
+  BOOTSTRAP_LOCAL_POOL_UNAVAILABLE_MARKER,
 };

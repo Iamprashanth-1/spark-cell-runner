@@ -1,5 +1,7 @@
 // Command registrations for the Spark Cell Runner extension.
 
+const fs = require('node:fs');
+const path = require('node:path');
 const vscode = require('vscode');
 const { NOTEBOOK_TYPE } = require('./constants');
 const { parseNotebookText, findCellIndexForLine } = require('./parser');
@@ -8,18 +10,158 @@ const runner = require('./runner');
 const scriptBuilder = require('./scriptBuilder');
 const session = require('./session');
 const pythonEnv = require('./pythonEnv');
+const poolManager = require('./poolManager');
+const containerManager = require('./containerManager');
+const ucSync = require('./ucSync');
+const state = require('./state');
 const decorations = require('./ui/decorations');
 const { showRunResultPanel } = require('./ui/resultPanel');
 const { syncPyEditorAssociation, reopenActivePyForCurrentMode } = require('./navigation');
 
+function getActiveDocument() {
+  return vscode.window.activeTextEditor ? vscode.window.activeTextEditor.document : undefined;
+}
+
+function refreshDatabricksSidebar() {
+  if (state.databricksSidebar) {
+    state.databricksSidebar.refresh();
+  }
+}
+
+async function pickLocalPool(title) {
+  const pools = poolManager.listPools();
+
+  if (pools.length === 0) {
+    void vscode.window.showInformationMessage(
+      'No local Spark pools exist yet. Run "Spark Cell Runner: Create Local Spark Pool" first.'
+    );
+    return undefined;
+  }
+
+  if (pools.length === 1) {
+    return pools[0];
+  }
+
+  const pick = await vscode.window.showQuickPick(
+    pools.map((pool) => ({
+      label: pool.name,
+      description: `port ${pool.port} • ${pool.running ? 'running' : 'stopped'}`,
+      pool,
+    })),
+    { title, placeHolder: 'Select a local Spark pool' }
+  );
+
+  return pick ? pick.pool : undefined;
+}
+
+async function ensureSailInstalled(pythonCommand) {
+  if (await poolManager.isSailInstalled(pythonCommand)) {
+    return true;
+  }
+
+  const install = await vscode.window.showWarningMessage(
+    `pysail / pyspark-client are not installed in "${pythonCommand}". Install them into this environment now?`,
+    'Install'
+  );
+
+  if (install !== 'Install') {
+    return false;
+  }
+
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: 'Installing pysail and pyspark-client...' },
+    () => poolManager.installSail(pythonCommand, state.output)
+  );
+
+  return true;
+}
+
+// Asks which Python environment to target (venv discovery + manual path).
+async function pickPythonEnvironment(title, document) {
+  const candidates = await pythonEnv.discoverPythonCandidates(document);
+  const current = getConfiguration().pythonCommand;
+
+  const items = candidates.map((candidate) => ({
+    label: candidate,
+    description: candidate === current ? 'current runner environment' : undefined,
+  }));
+  items.push({ label: '$(pencil) Enter a Python path manually...', manual: true });
+
+  const pick = await vscode.window.showQuickPick(items, {
+    title,
+    placeHolder: 'Pick a virtual environment or interpreter (Sail is installed into the one you pick)',
+    ignoreFocusOut: true,
+  });
+
+  if (!pick) {
+    return undefined;
+  }
+
+  if (!pick.manual) {
+    return pick.label;
+  }
+
+  const manual = await vscode.window.showInputBox({
+    title,
+    prompt: 'Path to a python.exe or a virtual environment folder',
+    ignoreFocusOut: true,
+    validateInput: (value) => {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return 'Enter a path.';
+      }
+      if (trimmed.includes(path.sep) && !fs.existsSync(trimmed)) {
+        return 'That path does not exist.';
+      }
+      return undefined;
+    },
+  });
+
+  return manual ? manual.trim() : undefined;
+}
+
+async function startPoolWithFeedback(pool) {
+  if (!(await ensureSailInstalled(pool.pythonCommand))) {
+    return;
+  }
+
+  try {
+    await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: `Starting local Spark pool "${pool.name}"...` },
+      () => poolManager.startPool(pool.name, state.output)
+    );
+    void vscode.window.showInformationMessage(
+      `Local Spark pool "${pool.name}" is serving on sc://127.0.0.1:${pool.port}.`
+    );
+  } catch (error) {
+    state.output.show(true);
+    void vscode.window.showErrorMessage(
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+
+  refreshDatabricksSidebar();
+}
+
 function registerCommands(context, output) {
   context.subscriptions.push(
     vscode.commands.registerCommand('sparkCellRunner.openAsNotebook', async (uri) => {
-      const targetUri = uri || (vscode.window.activeTextEditor ? vscode.window.activeTextEditor.document.uri : undefined);
+      const targetUri = uri
+        || (vscode.window.activeTextEditor ? vscode.window.activeTextEditor.document.uri : undefined)
+        || (vscode.window.activeNotebookEditor ? vscode.window.activeNotebookEditor.notebook.uri : undefined);
+
       if (!targetUri) {
+        void vscode.window.showInformationMessage('Open a .py file first, then run "Open as Databricks Notebook".');
         return;
       }
-      await vscode.commands.executeCommand('vscode.openWith', targetUri, NOTEBOOK_TYPE);
+
+      try {
+        await vscode.commands.executeCommand('vscode.openWith', targetUri, NOTEBOOK_TYPE);
+      } catch (error) {
+        void vscode.window.showErrorMessage(
+          `Could not open as Databricks notebook: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
     }),
   );
 
@@ -182,6 +324,357 @@ function registerCommands(context, output) {
       }
 
       await showRunResultPanel(runState.payload);
+    }),
+  );
+
+  // ----- Local Spark pool commands -----
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.setConnectionMode', async (mode) => {
+      const document = getActiveDocument();
+      let target = mode;
+
+      if (target !== 'local' && target !== 'databricks') {
+        const pick = await vscode.window.showQuickPick(
+          [
+            { label: 'Databricks (serverless / cluster)', mode: 'databricks' },
+            { label: 'Local Spark pool (Sail)', mode: 'local' },
+          ],
+          { title: 'Set connection mode', placeHolder: 'Where should Spark sessions run?' }
+        );
+        if (!pick) {
+          return;
+        }
+        target = pick.mode;
+      }
+
+      await updateWorkspaceSetting('connectionMode', target, document);
+
+      if (target === 'local') {
+        const pools = poolManager.listPools();
+        const current = getConfiguration().localPool;
+        if (pools.length > 0 && !pools.some((pool) => pool.name === current)) {
+          await updateWorkspaceSetting('localPool', pools[0].name, document);
+          void vscode.window.showInformationMessage(`Local Spark pool mode enabled using pool "${pools[0].name}".`);
+        } else {
+          void vscode.window.showInformationMessage('Local Spark pool mode enabled.');
+        }
+      } else {
+        void vscode.window.showInformationMessage('Databricks connection mode enabled.');
+      }
+
+      refreshDatabricksSidebar();
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.createLocalPool', async () => {
+      const document = getActiveDocument();
+
+      const name = await vscode.window.showInputBox({
+        title: 'New local Spark pool',
+        prompt: 'Pool name (letters, digits, dots, dashes, underscores)',
+        value: 'local',
+        ignoreFocusOut: true,
+      });
+      if (!name) {
+        return;
+      }
+
+      const pythonCommand = await pickPythonEnvironment('Python environment for the pool', document);
+      if (!pythonCommand) {
+        return;
+      }
+
+      if (!(await ensureSailInstalled(pythonCommand))) {
+        void vscode.window.showInformationMessage(
+          'Pool creation cancelled — pysail is required in the selected environment. Run "Install Local Pool Packages" to add it later.'
+        );
+        return;
+      }
+
+      const defaultPort = await poolManager.findFreePort();
+      const portText = await vscode.window.showInputBox({
+        title: 'Spark Connect port',
+        prompt: 'Port the pool serves Spark Connect on (sc://127.0.0.1:<port>)',
+        value: String(defaultPort),
+        validateInput: (value) => {
+          const port = Number(value);
+          return Number.isInteger(port) && port >= 1 && port <= 65535
+            ? undefined
+            : 'Enter a port between 1 and 65535.';
+        },
+        ignoreFocusOut: true,
+      });
+      if (!portText) {
+        return;
+      }
+
+      let pool;
+      try {
+        pool = poolManager.createPool({
+          name,
+          pythonCommand,
+          port: Number(portText),
+        });
+      } catch (error) {
+        void vscode.window.showErrorMessage(
+          error instanceof Error ? error.message : String(error)
+        );
+        return;
+      }
+
+      await updateWorkspaceSetting('localPool', pool.name, document);
+      await updateWorkspaceSetting('connectionMode', 'local', document);
+      void vscode.window.showInformationMessage(
+        `Local Spark pool "${pool.name}" created (warehouse: ${pool.warehousePath}).`
+      );
+
+      const startNow = await vscode.window.showInformationMessage(
+        `Start pool "${pool.name}" now?`,
+        'Start Pool'
+      );
+      if (startNow === 'Start Pool') {
+        await startPoolWithFeedback(pool);
+      } else {
+        refreshDatabricksSidebar();
+      }
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.startLocalPool', async (name) => {
+      const pool = name ? poolManager.getPool(name) : await pickLocalPool('Start local Spark pool');
+      if (!pool) {
+        return;
+      }
+      await startPoolWithFeedback(pool);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.stopLocalPool', async (name) => {
+      const pool = name ? poolManager.getPool(name) : await pickLocalPool('Stop local Spark pool');
+      if (!pool) {
+        return;
+      }
+
+      await poolManager.stopPool(pool.name);
+      void vscode.window.showInformationMessage(`Local Spark pool "${pool.name}" stopped.`);
+      refreshDatabricksSidebar();
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.showPoolLogs', async (name) => {
+      const pool = name ? poolManager.getPool(name) : await pickLocalPool('Show pool logs');
+      if (!pool) {
+        return;
+      }
+
+      if (!fs.existsSync(pool.logFile)) {
+        fs.mkdirSync(path.dirname(pool.logFile), { recursive: true });
+        fs.writeFileSync(pool.logFile, `No output yet for pool "${pool.name}".\n`);
+      }
+
+      const document = await vscode.workspace.openTextDocument(vscode.Uri.file(pool.logFile));
+      await vscode.window.showTextDocument(document, { preview: true });
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.deleteLocalPool', async (name) => {
+      const pool = name ? poolManager.getPool(name) : await pickLocalPool('Delete local Spark pool');
+      if (!pool) {
+        return;
+      }
+
+      const confirm = await vscode.window.showWarningMessage(
+        `Delete local Spark pool "${pool.name}"? The warehouse folder on disk is kept.`,
+        { modal: true },
+        'Delete'
+      );
+      if (confirm !== 'Delete') {
+        return;
+      }
+
+      await poolManager.deletePool(pool.name);
+
+      const configuration = getConfiguration();
+      if (configuration.localPool === pool.name) {
+        await updateWorkspaceSetting('localPool', '', getActiveDocument());
+      }
+
+      void vscode.window.showInformationMessage(`Local Spark pool "${pool.name}" deleted.`);
+      refreshDatabricksSidebar();
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.installLocalPoolPackages', async () => {
+      const document = getActiveDocument();
+      const pythonCommand = await pickPythonEnvironment(
+        'Install pysail into which Python environment?',
+        document
+      );
+
+      if (!pythonCommand) {
+        return;
+      }
+
+      try {
+        await vscode.window.withProgress(
+          { location: vscode.ProgressLocation.Notification, title: `Installing pysail and pyspark-client into ${pythonCommand}...` },
+          () => poolManager.installSail(pythonCommand, state.output)
+        );
+
+        const installed = await poolManager.isSailInstalled(pythonCommand);
+        if (installed) {
+          void vscode.window.showInformationMessage(`pysail and pyspark-client installed into ${pythonCommand}.`);
+        } else {
+          void vscode.window.showWarningMessage(`Install finished, but "import pysail, pyspark" still fails in ${pythonCommand}. Check the output channel.`);
+        }
+      } catch (error) {
+        state.output.show(true);
+        void vscode.window.showErrorMessage(
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+
+      refreshDatabricksSidebar();
+    }),
+  );
+
+  // ----- Unity Catalog sync -----
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.syncUnityCatalog', async () => {
+      const configuration = getConfiguration();
+      const pool = poolManager.getPool(configuration.localPool);
+
+      if (!pool) {
+        void vscode.window.showErrorMessage(
+          'No local Spark pool is selected. Create one from the sidebar before syncing.'
+        );
+        return;
+      }
+
+      if (!(await poolManager.isPoolServing(pool))) {
+        const start = await vscode.window.showWarningMessage(
+          `Local Spark pool "${pool.name}" is not running. Start it now?`,
+          'Start Pool'
+        );
+        if (start === 'Start Pool') {
+          await startPoolWithFeedback(pool);
+          if (!(await poolManager.isPoolServing(pool))) {
+            return;
+          }
+        } else {
+          return;
+        }
+      }
+
+      state.output.show(true);
+
+      try {
+        const result = await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: 'Syncing Unity Catalog to local pool...',
+            cancellable: false,
+          },
+          (progress) => ucSync.runSync(state.output, (message) => {
+            progress.report({ message: message.length > 60 ? `${message.slice(0, 57)}...` : message });
+          })
+        );
+
+        if (result.ok) {
+          void vscode.window.showInformationMessage(`Unity Catalog sync finished: ${result.summary}`);
+        } else {
+          void vscode.window.showWarningMessage(`Unity Catalog sync finished with issues: ${result.summary}`);
+        }
+      } catch (error) {
+        state.output.appendLine(`[sync] failed: ${error.message || error}`);
+        void vscode.window.showErrorMessage(
+          `Unity Catalog sync failed: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+
+      refreshDatabricksSidebar();
+    }),
+  );
+
+  // ----- Lakehouse container (Docker / Podman) -----
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.launchLakehouseContainer', async () => {
+      const configuration = getConfiguration();
+      const pool = poolManager.getPool(configuration.localPool) || (await pickLocalPool('Launch the lakehouse stack for which pool?'));
+
+      if (!pool) {
+        return;
+      }
+
+      try {
+        const result = await vscode.window.withProgress(
+          { location: vscode.ProgressLocation.Notification, title: `Launching lakehouse container stack (${pool.name})...` },
+          () => containerManager.launchLakehouse(pool, state.output)
+        );
+
+        const creds = result.passwordVerified
+          ? `login ${result.username}/${result.password}`
+          : `check ${result.credentialsFile} for the login`;
+        const open = await vscode.window.showInformationMessage(
+          `Lakehouse stack is running on ${result.runtime}. Warehouse UI: ${result.uiUrl} (${creds}). Credentials are stored in ${result.credentialsFile}`,
+          'Open Warehouse UI',
+          'Show Credentials File'
+        );
+        if (open === 'Open Warehouse UI') {
+          await vscode.env.openExternal(vscode.Uri.parse(result.uiUrl));
+        } else if (open === 'Show Credentials File') {
+          const document = await vscode.workspace.openTextDocument(result.credentialsFile);
+          await vscode.window.showTextDocument(document, { preview: true });
+        }
+      } catch (error) {
+        void vscode.window.showErrorMessage(
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+
+      refreshDatabricksSidebar();
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.stopLakehouseContainer', async () => {
+      const configuration = getConfiguration();
+      const pool = poolManager.getPool(configuration.localPool) || (await pickLocalPool('Stop the lakehouse stack for which pool?'));
+
+      if (!pool) {
+        return;
+      }
+
+      try {
+        const result = await vscode.window.withProgress(
+          { location: vscode.ProgressLocation.Notification, title: `Stopping lakehouse container stack (${pool.name})...` },
+          () => containerManager.stopLakehouse(pool, state.output)
+        );
+        void vscode.window.showInformationMessage(
+          result.stopped ? `Lakehouse stack for "${pool.name}" stopped.` : 'No lakehouse stack was found for this pool.'
+        );
+      } catch (error) {
+        void vscode.window.showErrorMessage(
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+
+      refreshDatabricksSidebar();
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.openLakehouseConsole', async () => {
+      await vscode.env.openExternal(vscode.Uri.parse(`http://localhost:${containerManager.getCachedUiPort()}`));
     }),
   );
 }

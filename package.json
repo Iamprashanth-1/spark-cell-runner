@@ -2,8 +2,9 @@
   "name": "spark-cell-runner",
   "displayName": "Spark Cell Runner",
   "description": "Companion commands for running Databricks notebook-source Python cells from VS Code.",
-  "version": "0.2.0",
+  "version": "0.3.4",
   "publisher": "PrashanthReddyMunagala",
+  "license": "MIT",
   "engines": {
     "vscode": "^1.86.0"
   },
@@ -21,7 +22,7 @@
   ],
   "repository": {
     "type": "git",
-      "url": "https://github.com/PrashanthReddyMunagala-POC/spark-cell-runner"
+      "url": "https://github.com/Iamprashanth-1/spark-cell-runner.git"
   },
   "icon": "./media/icon.png",
   "activationEvents": [
@@ -99,6 +100,61 @@
       {
         "command": "sparkCellRunner.insertSqlFilterTemplate",
         "title": "Insert SQL Filter Template",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.setConnectionMode",
+        "title": "Set Connection Mode (Databricks / Local Pool)",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.createLocalPool",
+        "title": "Create Local Spark Pool",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.startLocalPool",
+        "title": "Start Local Spark Pool",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.stopLocalPool",
+        "title": "Stop Local Spark Pool",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.showPoolLogs",
+        "title": "Show Local Spark Pool Logs",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.deleteLocalPool",
+        "title": "Delete Local Spark Pool",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.installLocalPoolPackages",
+        "title": "Install Local Pool Packages (pysail)",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.syncUnityCatalog",
+        "title": "Sync Unity Catalog to Local Pool",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.launchLakehouseContainer",
+        "title": "Launch Lakehouse Container (Docker/Podman)",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.stopLakehouseContainer",
+        "title": "Stop Lakehouse Container (Docker/Podman)",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.openLakehouseConsole",
+        "title": "Open Lakehouse MinIO Console",
         "category": "Spark Cell Runner"
       }
     ],
@@ -185,6 +241,56 @@
           "default": false,
           "scope": "resource",
           "description": "Use Databricks Connect serverless mode instead of a cluster ID."
+        },
+        "sparkCellRunner.connectionMode": {
+          "type": "string",
+          "enum": [
+            "databricks",
+            "local"
+          ],
+          "default": "databricks",
+          "scope": "resource",
+          "description": "Where Spark sessions run: 'databricks' connects through databricks-connect (serverless or cluster); 'local' connects to a local Spark pool (Sail Spark Connect server) managed from the sidebar."
+        },
+        "sparkCellRunner.localPool": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Name of the local Spark pool used when connectionMode is 'local'. Pools are created from the sidebar or the 'Create Local Spark Pool' command."
+        },
+        "sparkCellRunner.syncCatalog": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Unity Catalog sync: catalog to sync (empty = all catalogs)."
+        },
+        "sparkCellRunner.syncSchema": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Unity Catalog sync: schema to sync (empty = all schemas in the catalog)."
+        },
+        "sparkCellRunner.syncTables": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Unity Catalog sync: table name glob pattern such as dim_* (empty = all tables)."
+        },
+        "sparkCellRunner.syncMode": {
+          "type": "string",
+          "enum": [
+            "schema",
+            "data"
+          ],
+          "default": "schema",
+          "scope": "resource",
+          "description": "Unity Catalog sync: 'schema' recreates empty Delta tables with matching columns; 'data' also copies table contents through a Databricks session."
+        },
+        "sparkCellRunner.syncRowLimit": {
+          "type": "number",
+          "default": 0,
+          "scope": "resource",
+          "description": "Unity Catalog sync: maximum rows copied per table in data mode (0 = no limit)."
         },
         "sparkCellRunner.workspacePathMappings": {
           "type": "object",

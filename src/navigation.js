@@ -462,51 +462,78 @@ async function syncPyEditorAssociation() {
 
     const next = { ...current, '*.py': desired };
 
+    // Prefer workspace scope (project-local behavior); fall back to user
+    // scope when there is no folder or the workspace write is not allowed
+    // (e.g. restricted mode) — otherwise the toggle would silently no-op.
+    const hasWorkspace = (vscode.workspace.workspaceFolders || []).length > 0;
+
     try {
-        await workbench.update('editorAssociations', next, vscode.ConfigurationTarget.Workspace);
+        await workbench.update(
+            'editorAssociations',
+            next,
+            hasWorkspace ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global
+        );
     } catch (error) {
-        if (state.output) {
-            state.output.appendLine(`[nav] editorAssociation update failed: ${error && error.message}`);
+        try {
+            await workbench.update('editorAssociations', next, vscode.ConfigurationTarget.Global);
+        } catch (fallbackError) {
+            if (state.output) {
+                state.output.appendLine(`[nav] editorAssociation update failed: ${fallbackError && fallbackError.message}`);
+            }
+            void vscode.window.showWarningMessage(
+                `Spark Cell Runner could not update the .py editor association: ${fallbackError && fallbackError.message}`
+            );
         }
     }
 }
 
-// Reopen the active .py so a toggle change takes effect immediately for the open file.
+// Reopen every open .py tab so a toggle change takes effect immediately — not
+// just the focused editor, which is undefined while focus sits in a webview
+// (exactly when the user clicks the sidebar toggle). Notebook tabs of our type
+// become plain text editors when the toggle is off, and plain text editors
+// become notebooks when it is on. Dirty tabs are skipped to avoid losing work.
 async function reopenActivePyForCurrentMode() {
     const enabled = getConfiguration().openPyFilesAsNotebook;
+    const targets = new Map(); // uri -> notebookType (or undefined for text)
 
-    if (!enabled) {
-        const notebookEditor = vscode.window.activeNotebookEditor;
+    for (const group of vscode.window.tabGroups.all) {
+        for (const tab of group.tabs) {
+            const input = tab.input;
 
-        if (
-            notebookEditor
-            && notebookEditor.notebook.notebookType === NOTEBOOK_TYPE
-            && notebookEditor.notebook.uri.scheme === 'file'
-            && path.extname(notebookEditor.notebook.uri.fsPath).toLowerCase() === '.py'
-        ) {
-            await vscode.commands.executeCommand(
-                'vscode.openWith',
-                notebookEditor.notebook.uri,
-                'default'
-            );
+            if (!input || !input.uri || input.uri.scheme !== 'file') {
+                continue;
+            }
+
+            if (!/\.py$/i.test(input.uri.fsPath) || /\.py\.py$/i.test(input.uri.fsPath)) {
+                continue;
+            }
+
+            if (tab.isDirty) {
+                continue;
+            }
+
+            const notebookType = input.notebookType;
+
+            if (enabled && !notebookType) {
+                targets.set(input.uri.toString(), input.uri); // plain text -> notebook
+            } else if (!enabled && notebookType === NOTEBOOK_TYPE) {
+                targets.set(input.uri.toString(), input.uri); // notebook -> plain text
+            }
         }
-
-        return;
     }
 
-    const textEditor = vscode.window.activeTextEditor;
-
-    if (
-        textEditor
-        && textEditor.document.uri.scheme === 'file'
-        && path.extname(textEditor.document.uri.fsPath).toLowerCase() === '.py'
-        && !/\.py\.py$/i.test(textEditor.document.uri.fsPath)
-    ) {
-        await vscode.commands.executeCommand(
-            'vscode.openWith',
-            textEditor.document.uri,
-            NOTEBOOK_TYPE
-        );
+    for (const uri of targets.values()) {
+        try {
+            await vscode.commands.executeCommand(
+                'vscode.openWith',
+                uri,
+                enabled ? NOTEBOOK_TYPE : 'default'
+            );
+        } catch (error) {
+            if (state.output) {
+                state.output.appendLine(`[nav] reopen failed for ${uri}: ${error && error.message}`);
+            }
+        }
     }
 }
 

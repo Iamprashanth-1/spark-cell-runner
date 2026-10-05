@@ -93,8 +93,12 @@ function getRunResultHtml(payload) {
 :root {
     color-scheme: light dark;
     --border: color-mix(in srgb, currentColor 18%, transparent);
-    --accent: #0f6cbd;
+    --accent: var(--vscode-button-background, #0f6cbd);
+    --accent-fg: var(--vscode-button-foreground, #ffffff);
     --bg-soft: color-mix(in srgb, canvas 92%, currentColor 8%);
+    --ok: var(--vscode-terminal-ansiGreen, #3fb950);
+    --danger: var(--vscode-terminal-ansiRed, #f85149);
+    --muted: color-mix(in srgb, canvastext 55%, transparent);
 }
 
 body {
@@ -108,14 +112,45 @@ body {
 .meta {
     display: grid;
     gap: 6px;
-    margin-bottom: 16px;
+    margin-bottom: 14px;
     padding: 12px;
     border: 1px solid var(--border);
+    border-radius: 10px;
     background: var(--bg-soft);
 }
 
-.meta strong {
-    color: var(--accent);
+.meta-row { display: grid; grid-template-columns: 110px 1fr; gap: 8px; align-items: baseline; }
+
+.meta .k {
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.exit-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 1px 9px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--ok) 45%, transparent);
+    color: var(--ok);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.exit-badge.failed {
+    border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+    color: var(--danger);
+}
+
+.exit-badge .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: currentColor;
 }
 
 .tabs {
@@ -130,18 +165,25 @@ body {
     background: transparent;
     color: inherit;
     padding: 6px 12px;
+    border-radius: 8px;
     cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 600;
 }
+
+.tab-button:hover { border-color: var(--accent); }
 
 .tab-button.active {
     background: var(--accent);
     border-color: var(--accent);
-    color: white;
+    color: var(--accent-fg);
 }
 
 .tab-panel {
     display: none;
     border: 1px solid var(--border);
+    border-radius: 10px;
     padding: 12px;
     background: var(--bg-soft);
 }
@@ -166,11 +208,12 @@ pre {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--accent);
+    color: var(--muted);
 }
 
 .copy-button {
     border: 1px solid var(--border);
+    border-radius: 6px;
     background: transparent;
     color: inherit;
     font: inherit;
@@ -184,16 +227,16 @@ pre {
 .copy-button:hover {
     background: var(--accent);
     border-color: var(--accent);
-    color: white;
+    color: var(--accent-fg);
 }
 </style>
 </head>
 <body>
 <div class="meta">
-        <div><strong>Label:</strong> ${escapeHtml(payload.built.label)}</div>
-        <div><strong>Script:</strong> ${escapeHtml(payload.scriptPath)}</div>
-        <div><strong>Output File:</strong> ${escapeHtml(payload.resultPath)}</div>
-        <div><strong>Exit Code:</strong> ${escapeHtml(String(payload.result.exitCode))}</div>
+        <div class="meta-row"><span class="k">Cell</span><span>${escapeHtml(payload.built.label)}</span></div>
+        <div class="meta-row"><span class="k">Exit Code</span><span><span class="exit-badge${payload.result.exitCode === 0 ? '' : ' failed'}"><span class="dot"></span>${escapeHtml(String(payload.result.exitCode))}${payload.result.exitCode === 0 ? ' success' : ' failed'}</span></span></div>
+        <div class="meta-row"><span class="k">Script</span><span>${escapeHtml(payload.scriptPath)}</span></div>
+        <div class="meta-row"><span class="k">Output File</span><span>${escapeHtml(payload.resultPath)}</span></div>
     </div>
     <div class="tabs">${buttons}</div>
     ${panels}

@@ -608,6 +608,7 @@ module.exports = {
     clearResolvedPythonCommandForDocument,
     resolvePythonCommand,
     detectPythonInterpreter,
+    discoverPythonCandidates,
     normalizeInterpreterPath,
     resolveInterpreterCandidatePath,
     updatePythonCommandSetting,

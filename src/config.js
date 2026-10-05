@@ -12,6 +12,8 @@ function getConfiguration() {
         databricksProfile: configuration.get('databricksProfile', ''),
         clusterId: configuration.get('clusterId', ''),
         useServerless: configuration.get('useServerless', false),
+        connectionMode: configuration.get('connectionMode', 'databricks'),
+        localPool: configuration.get('localPool', ''),
         workspacePathMappings: configuration.get('workspacePathMappings', {}),
         secretValues: configuration.get('secretValues', {}),
         widgetValues: configuration.get('widgetValues', {}),

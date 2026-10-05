@@ -1,3 +1,5 @@
+# Databricks notebook source
+
 import builtins
 import os
 import re
@@ -67,26 +69,24 @@ def __dcr_wrap_logging_helpers():
     for _name in ["log_appinsights", "log_info", "log_warning", "log_error", "log_metric"]:
         if _name in globals():
             globals()[_name] = __dcr_safe_callable(globals()[_name], _name)
-def __dcr_wrap_aladdin_config_reader():
+def __dcr_wrap_hello__config_reader():
     reader_cls = globals().get("AladdinConfigReader")
     if reader_cls is None:
         return
     original = getattr(reader_cls, "get_config_variables", None)
     if not callable(original) or getattr(original, "__dcr_safe_wrapper__", False):
         return
-    def _wrapped(self, aladdin_file_id):
-        result = original(self, aladdin_file_id)
+    def _wrapped(self, hello__file_id):
+        result = original(self, hello__file_id)
         if result is not None:
             return result
         try:
             full_table_name = getattr(self, "full_table_name", f"{getattr(self, 'catalog_name', '')}.{getattr(self, 'schema_name', 'common')}")
-            row = spark.sql(f"SELECT AladdinFileId, AladdinFileName, ConfigPath FROM {full_table_name} WHERE AladdinFileId = {aladdin_file_id}").collect()
+            row = spark.sql(f"SELECT * from table1").collect()
             if not row:
                 return None
             row = row[0]
             file_info = {
-                "AladdinFileId": row["AladdinFileId"],
-                "AladdinFileName": row["AladdinFileName"],
                 "config_path": row["ConfigPath"],
             }
             app_path = globals().get("app_storage_path", "")
@@ -257,7 +257,6 @@ builtins.open = __dcr_open
 dcr_original_exists = getattr(os.path, "__dcr_original_exists", os.path.exists)
 os.path.__dcr_original_exists = dcr_original_exists
 os.path.exists = lambda value: dcr_original_exists(dcr_translate_workspace_path(value))
-os.path.__dcr_original_isfile = dcr_original_isfile
 dcr_original_isfile = getattr(os.path, "__dcr_original_isfile", os.path.isfile)
 os.path.__dcr_original_isfile = dcr_original_isfile
 os.path.isfile = lambda value: dcr_original_isfile(dcr_translate_workspace_path(value))
@@ -315,11 +314,11 @@ class DcrFsProxy:
         translated = dcr_translate_workspace_path(value)
         mapped = dcr_list_mapped_library_entries(translated)
         if mapped is not None:
-            return [DcrFileInfo(f"{str(value).rstrip("/")}/{name}", name, os.path.isdir(os.path.join(translated, name)), os.path.getsize(os.path.join(translated, name)) if os.path.isfile(os.path.join(translated, name)) else 0) for name in mapped]
+            return [DcrFileInfo(f"{str(value).rstrip('/')}/{name}", name, os.path.isdir(os.path.join(translated, name)), os.path.getsize(os.path.join(translated, name)) if os.path.isfile(os.path.join(translated, name)) else 0) for name in mapped]
         if dcr_path_is_abfss(value):
             return dcr_list_via_spark(value)
         if os.path.isdir(translated):
-            return [DcrFileInfo(f"{str(value).rstrip("/")}/{name}", name, os.path.isdir(os.path.join(translated, name)), os.path.getsize(os.path.join(translated, name)) if os.path.isfile(os.path.join(translated, name)) else 0) for name in os.listdir(translated)]
+            return [DcrFileInfo(f"{str(value).rstrip('/')}/{name}", name, os.path.isdir(os.path.join(translated, name)), os.path.getsize(os.path.join(translated, name)) if os.path.isfile(os.path.join(translated, name)) else 0) for name in os.listdir(translated)]
         if self._wrapped is not None:
             return [DcrFileInfo.from_entry(entry) for entry in self._wrapped.fs.ls(value)]
         raise FileNotFoundError(translated)
@@ -534,14 +533,4 @@ try:
 except Exception:
     runtime_dbutils = None
 dbutils = globals().get('dbutils') or DcrDbutilsProxy(runtime_dbutils)
-try:
-    from databricks.connect import DatabricksSession
-    __DCR_BUILDER_LINE__
-    spark = globals().get('spark') or __dcr_builder.getOrCreate()
-    sql = globals().get('sql') or spark.sql
-    try:
-        from databricks.sdk import WorkspaceClient
-    except Exception:
-        pass
-except Exception as databricks_connect_error:
-    print(f'[spark-cell-runner] Databricks Connect bootstrap unavailable: {databricks_connect_error}')
+__SCR_CONNECTION_BLOCK__

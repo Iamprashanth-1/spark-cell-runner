@@ -150,6 +150,7 @@ async function buildScriptForParsedNotebook(
     }
 
     lines.push('try:');
+    const tryBodyStart = lines.length;
 
     const notebookContext = { notebookPath };
 
@@ -216,7 +217,19 @@ async function buildScriptForParsedNotebook(
         lines.push('');
     }
 
+    // A cell that expands to nothing (markdown-only, blank, comments-only)
+    // would leave the try block without a body — make it valid regardless.
+    if (!lines.slice(tryBodyStart).some((line) => line.trim().length > 0 && !line.trim().startsWith('#'))) {
+        lines.push('    pass');
+    }
+
     lines.push('except DCRNotebookExit as __dcr_notebook_exit:');
+    lines.push(
+        '    print(f"[spark-cell-runner] dbutils.notebook.exit called ({__dcr_notebook_exit}) - stopping run")'
+    );
+    // Re-raise so any remaining cells in this script are skipped and the
+    // driver reports the run as not-ok, matching Databricks behavior.
+    lines.push('    raise');
 
     // RECONSTRUCTED fields: the original snapshot returned only {script,
     // executedCellIndices}, but runNotebookCells reads the metadata below to write
@@ -398,7 +411,7 @@ async function expandCell(notebook, cell, context, visited) {
             }
 
             result.push("__dcr_wrap_logging_helpers()");
-            result.push("__dcr_wrap_aladdin_config_reader()");
+            result.push("__dcr_wrap_hello__config_reader()");
             result.push(`# End %run ${runMatch[1]}`);
 
             visited.delete(realPath);

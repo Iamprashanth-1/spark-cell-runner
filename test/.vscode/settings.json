@@ -1,0 +1,4 @@
+{
+  "sparkCellRunner.openPyFilesAsNotebook": true,
+  "sparkCellRunner.tempFolder": ".spark-cell-runner"
+}

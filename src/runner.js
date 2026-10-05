@@ -12,6 +12,7 @@ const pyResources = require('./pyResources');
 const session = require('./session');
 const scriptBuilder = require('./scriptBuilder');
 const pythonEnv = require('./pythonEnv');
+const poolManager = require('./poolManager');
 const decorations = require('./ui/decorations');
 const { showRunResultPanel, buildResultText } = require('./ui/resultPanel');
 const state = require('./state');
@@ -62,6 +63,7 @@ async function runNotebookCells(document, output, line) {
 
     if (
         configuration.injectDatabricksBootstrap &&
+        configuration.connectionMode !== 'local' &&
         !configuration.useServerless &&
         !configuration.clusterId.trim()
     ) {
@@ -101,7 +103,53 @@ async function runNotebookCells(document, output, line) {
         return;
     }
 
-    const pythonCommand = await pythonEnv.resolvePythonCommand(document);
+    if (configuration.injectDatabricksBootstrap && configuration.connectionMode === 'local') {
+        const pool = poolManager.getPool(configuration.localPool);
+        const serving = pool ? await poolManager.isPoolServing(pool) : false;
+
+        if (!serving) {
+            const message = pool
+                ? `Local Spark pool "${pool.name}" is not running. Start it from the Spark Cell Runner sidebar.`
+                : 'No local Spark pool is selected. Create one from the Spark Cell Runner sidebar.';
+
+            output.show(true);
+            output.appendLine(`\n[build-error] ${message}`);
+
+            decorations.updateRunState(
+                document,
+                targetCellIndex,
+                statusLine,
+                endLine,
+                'failure',
+                'Local pool unavailable'
+            );
+
+            void vscode.window.showErrorMessage(
+                message,
+                pool ? 'Start Pool' : 'Create Pool'
+            ).then(async (selection) => {
+                if (selection === 'Start Pool') {
+                    await vscode.commands.executeCommand(
+                        'sparkCellRunner.startLocalPool',
+                        pool.name
+                    );
+                } else if (selection === 'Create Pool') {
+                    await vscode.commands.executeCommand(
+                        'sparkCellRunner.createLocalPool'
+                    );
+                }
+            });
+
+            return;
+        }
+    }
+
+    // In local mode the session runs in the pool's venv — the runner env may
+    // not have the pyspark client needed for Spark Connect.
+    const pythonCommand = poolManager.resolveSessionPythonCommand(
+        await pythonEnv.resolvePythonCommand(document),
+        configuration
+    );
 
     output.appendLine(
         `[perf] resolvePythonCommand ${Date.now() - runStartTime}ms`
@@ -162,14 +210,20 @@ async function runNotebookCells(document, output, line) {
                 `[perf] bootstrap ${Date.now() - runStartTime}ms`
             );
 
-            const connectorError =
+            const bootstrapError =
                 configuration.injectDatabricksBootstrap
                     ? session.extractBootstrapConnectError(initResult)
                     : undefined;
 
-            if (connectorError) {
+            if (bootstrapError) {
+                const localHint =
+                    bootstrapError.kind === 'local-pool' && /No module named/i.test(bootstrapError.detail)
+                        ? ' Use the sidebar "Install Sail packages" action to install pysail and pyspark-client into the pool environment, then restart the session.'
+                        : '';
                 const message =
-                    `Databricks connect is not available in ${pythonCommand}: ${connectorError}`;
+                    bootstrapError.kind === 'local-pool'
+                        ? `Local Spark pool bootstrap failed: ${bootstrapError.detail}.${localHint}`
+                        : `Databricks connect is not available in ${pythonCommand}: ${bootstrapError.detail}`;
 
                 output.show(true);
                 output.appendLine(`\n[build-error] ${message}`);
@@ -185,7 +239,9 @@ async function runNotebookCells(document, output, line) {
                     statusLine,
                     endLine,
                     "failure",
-                    "Databricks Connect unavailable"
+                    bootstrapError.kind === 'local-pool'
+                        ? "Local pool unavailable"
+                        : "Databricks Connect unavailable"
                 );
 
                 void vscode.window.showErrorMessage(
@@ -436,7 +492,10 @@ async function executeNotebookCells(cells, notebook, output) {
     const configuration = getConfiguration();
     const notebookPath =
         parsedNotebook.notebookPath || notebook.uri.fsPath || notebook.uri.path;
-    const pythonCommand = await pythonEnv.resolvePythonCommand({ uri: notebook.uri });
+    const pythonCommand = poolManager.resolveSessionPythonCommand(
+        await pythonEnv.resolvePythonCommand({ uri: notebook.uri }),
+        configuration
+    );
     const bootstrapCode = await pyResources.buildBootstrapCode();
     const runtimeDataCode = await pyResources.buildRuntimeDataCode();
     const runHistory = session.getOrCreateNotebookRunHistory(notebookKey);
@@ -444,6 +503,7 @@ async function executeNotebookCells(cells, notebook, output) {
 
     if (
         configuration.injectDatabricksBootstrap &&
+        configuration.connectionMode !== 'local' &&
         !configuration.useServerless &&
         !configuration.clusterId.trim()
     ) {
@@ -454,6 +514,23 @@ async function executeNotebookCells(cells, notebook, output) {
             'Cluster ID required unless serverless mode is enabled.'
         );
         return;
+    }
+
+    if (configuration.injectDatabricksBootstrap && configuration.connectionMode === 'local') {
+        const pool = poolManager.getPool(configuration.localPool);
+        const serving = pool ? await poolManager.isPoolServing(pool) : false;
+
+        if (!serving) {
+            appendSkippedNotebookOutputs(
+                notebook,
+                orderedCells,
+                0,
+                pool
+                    ? `Local Spark pool "${pool.name}" is not running. Start it from the Spark Cell Runner sidebar.`
+                    : 'No local Spark pool is selected. Create one from the Spark Cell Runner sidebar.'
+            );
+            return;
+        }
     }
 
     let currentSession = await session.getOrCreateNotebookSession(
@@ -494,11 +571,11 @@ async function executeNotebookCells(cells, notebook, output) {
             return;
         }
 
-        const connectError = configuration.injectDatabricksBootstrap
+        const bootstrapError = configuration.injectDatabricksBootstrap
             ? session.extractBootstrapConnectError(initResult)
             : undefined;
 
-        if (connectError) {
+        if (bootstrapError) {
             session.disposeNotebookSession(notebook.uri, {
                 preserveRunHistory: true
             });
@@ -507,7 +584,9 @@ async function executeNotebookCells(cells, notebook, output) {
                 notebook,
                 orderedCells,
                 0,
-                `Databricks Connect is not available in ${pythonCommand}: ${connectError}`
+                bootstrapError.kind === 'local-pool'
+                    ? `Local Spark pool bootstrap failed: ${bootstrapError.detail}. Use the sidebar "Install Sail packages" action if the pool environment is missing pyspark.`
+                    : `Databricks Connect is not available in ${pythonCommand}: ${bootstrapError.detail}`
             );
             return;
         }

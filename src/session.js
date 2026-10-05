@@ -5,7 +5,7 @@
 
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const { NOTEBOOK_TYPE, BOOTSTRAP_CONNECT_UNAVAILABLE_MARKER } = require('./constants');
+const { NOTEBOOK_TYPE, BOOTSTRAP_CONNECT_UNAVAILABLE_MARKER, BOOTSTRAP_LOCAL_POOL_UNAVAILABLE_MARKER } = require('./constants');
 const { getConfiguration, stableStringify } = require('./config');
 const { resolveCommandParts, createDatabricksChildEnv } = require('./pythonEnv');
 const pyResources = require('./pyResources');
@@ -20,6 +20,8 @@ async function getOrCreateNotebookSession(notebook, pythonCommand, output) {
     databricksProfile: configuration.databricksProfile,
     clusterId: configuration.clusterId,
     useServerless: configuration.useServerless,
+    connectionMode: configuration.connectionMode,
+    localPool: configuration.localPool,
   });
 
   const existing = state.notebookSessions.get(key);
@@ -233,28 +235,44 @@ function getReplayExecutedCellIndices(runHistory, session, targetCellIndex) {
 }
 
 function extractBootstrapConnectError(initResult) {
-    const marker = BOOTSTRAP_CONNECT_UNAVAILABLE_MARKER;
+    const markers = [
+        {
+            marker: BOOTSTRAP_CONNECT_UNAVAILABLE_MARKER,
+            kind: 'databricks',
+            fallback:
+                'Databricks Connect is unavailable in the selected environment.',
+        },
+        {
+            marker: BOOTSTRAP_LOCAL_POOL_UNAVAILABLE_MARKER,
+            kind: 'local-pool',
+            fallback: 'The local Spark pool could not be reached.',
+        },
+    ];
 
     const haystack = `${(initResult && initResult.stdout) || ''}\n${
         (initResult && initResult.stderr) || ''
     }`;
 
-    const line = haystack
-        .split(/\r?\n/)
-        .find((entry) => entry.includes(marker));
+    for (const { marker, kind, fallback } of markers) {
+        const line = haystack
+            .split(/\r?\n/)
+            .find((entry) => entry.includes(marker));
 
-    if (!line) {
-        return undefined;
+        if (!line) {
+            continue;
+        }
+
+        const detail = line
+            .slice(line.indexOf(marker) + marker.length)
+            .trim();
+
+        return {
+            kind,
+            detail: detail || fallback,
+        };
     }
 
-    const detail = line
-        .slice(line.indexOf(marker) + marker.length)
-        .trim();
-
-    return (
-        detail ||
-        'Databricks Connect is unavailable in the selected environment.'
-    );
+    return undefined;
 }
 
 function filterNotebookStdout(stdout) {
