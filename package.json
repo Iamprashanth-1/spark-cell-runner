@@ -1,0 +1,242 @@
+{
+  "name": "spark-cell-runner",
+  "displayName": "Spark Cell Runner",
+  "description": "Companion commands for running Databricks notebook-source Python cells from VS Code.",
+  "version": "0.2.0",
+  "publisher": "PrashanthReddyMunagala",
+  "engines": {
+    "vscode": "^1.86.0"
+  },
+  "categories": [
+    "Other",
+    "Data Science"
+  ],
+  "keywords": [
+    "databricks",
+    "notebook",
+    "pyspark",
+    "spark",
+    "databricks-connect",
+    "sql"
+  ],
+  "repository": {
+    "type": "git",
+      "url": "https://github.com/PrashanthReddyMunagala-POC/spark-cell-runner"
+  },
+  "icon": "./media/icon.png",
+  "activationEvents": [
+    "onLanguage:python",
+    "onNotebook:databricks-notebook-source",
+    "onNotebook:jupyter-notebook"
+  ],
+  "main": "./src/extension.js",
+  "scripts": {
+    "package": "vsce package",
+    "preview:ui": "node test/preview-ui.js"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "sparkCellRunner.openAsNotebook",
+        "title": "Open as Databricks Notebook",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.runCurrentCell",
+        "title": "Run Current Databricks Cell",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.runAllCells",
+        "title": "Run All Databricks Cells",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.runNotebookToCurrentCell",
+        "title": "Run Notebook to Current Cell",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.previewCurrentCell",
+        "title": "Preview Current Databricks Cell Script",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.showCellOutput",
+        "title": "Show Databricks Cell Output",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.restartNotebookSession",
+        "title": "Restart Databricks Notebook Session",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.useActivePythonInterpreter",
+        "title": "Use Active VS Code Python Interpreter",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.selectPythonEnvironment",
+        "title": "Select Databricks Python Environment",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.setPythonEnvironmentPath",
+        "title": "Set Databricks Python Path",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.setClusterId",
+        "title": "Set Databricks Cluster ID",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.toggleServerlessMode",
+        "title": "Toggle Databricks Serverless Mode",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.insertSqlFilterTemplate",
+        "title": "Insert SQL Filter Template",
+        "category": "Spark Cell Runner"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "sparkCellRunner.openAsNotebook",
+          "when": "editorLangId == python && resourceExtname == .py",
+          "group": "databricks@1"
+        },
+        {
+          "command": "sparkCellRunner.runCurrentCell",
+          "when": "editorLangId == python && resourceExtname == .py",
+          "group": "databricks@2"
+        },
+        {
+          "command": "sparkCellRunner.runAllCells",
+          "when": "editorLangId == python && resourceExtname == .py",
+          "group": "databricks@3"
+        },
+        {
+          "command": "sparkCellRunner.previewCurrentCell",
+          "when": "editorLangId == python && resourceExtname == .py",
+          "group": "databricks@4"
+        },
+        {
+          "command": "sparkCellRunner.showCellOutput",
+          "when": "editorLangId == python && resourceExtname == .py",
+          "group": "databricks@5"
+        }
+      ]
+    },
+    "notebooks": [
+      {
+        "type": "databricks-notebook-source",
+        "displayName": "Spark Notebook Source",
+        "selector": [
+          {
+            "filenamePattern": "*.py"
+          }
+        ]
+      }
+    ],
+    "configurationDefaults": {
+      "[python]": {
+        "editor.gotoLocation.multipleDefinitions": "goto"
+      }
+    },
+    "configuration": {
+      "title": "Spark Cell Runner",
+      "properties": {
+        "sparkCellRunner.pythonCommand": {
+          "type": "string",
+          "default": "python",
+          "scope": "resource",
+          "description": "Python command, interpreter path, or virtual-environment folder used to run generated scripts. Point this at an environment with databricks-connect installed."
+        },
+        "sparkCellRunner.tempFolder": {
+          "type": "string",
+          "default": ".spark-cell-runner",
+          "scope": "resource",
+          "description": "Workspace-relative folder where generated scripts are written."
+        },
+        "sparkCellRunner.injectDatabricksBootstrap": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Inject a best-effort Databricks Connect bootstrap that creates spark and sql when databricks-connect is available."
+        },
+        "sparkCellRunner.databricksProfile": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Optional Databricks config profile name to use for authentication, for example DEV or DEFAULT."
+        },
+        "sparkCellRunner.clusterId": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Databricks cluster ID used for Databricks Connect runs."
+        },
+        "sparkCellRunner.useServerless": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "description": "Use Databricks Connect serverless mode instead of a cluster ID."
+        },
+        "sparkCellRunner.workspacePathMappings": {
+          "type": "object",
+          "default": {},
+          "scope": "resource",
+          "description": "Map Databricks workspace-style file paths such as /Workspace/... to local filesystem prefixes."
+        },
+        "sparkCellRunner.secretValues": {
+          "type": "object",
+          "default": {},
+          "scope": "resource",
+          "description": "Optional local replacements for dbutils.secrets.get values, keyed as scope/key or just key."
+        },
+        "sparkCellRunner.widgetValues": {
+          "type": "object",
+          "default": {},
+          "scope": "resource",
+          "description": "Optional values for dbutils.widgets shown in the Databricks sidebar. Keys should match widget names in the notebook."
+        },
+        "sparkCellRunner.openPyFilesAsNotebook": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "description": "When enabled, .py files are automatically opened in the Databricks notebook view. When disabled, .py files open as plain text."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "sparkCellRunner",
+          "title": "Spark Cell Runner",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "sparkCellRunner": [
+        {
+          "id": "sparkCellRunner.workspaceView",
+          "name": "Workspace",
+          "type": "webview"
+        },
+        {
+          "id": "sparkCellRunner.settingsView",
+          "name": "Settings",
+          "type": "webview"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@vscode/vsce": "^4.0.0"
+  }
+}

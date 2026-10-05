@@ -1,0 +1,9 @@
+# Packaging exclusions for vsce
+.vscode/**
+_legacy_backup/**
+test/**
+node_modules/
+**/*.map
+.gitignore
+_convert_python.js
+*.vsix
