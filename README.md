@@ -197,6 +197,26 @@ The local pool runs **[Sail](https://github.com/lakehq/sail)** (PyPI package
   bootstrap only needs a Spark Connect endpoint, so a future pool can point
   at any Spark-Connect-compatible engine without touching notebook code.
 
+### Unity Catalog explorer
+
+A second tree view, **Unity Catalog**, browses catalogs/schemas/tables/columns
+from one of two sources — switch with the swap button in the view title:
+
+- **Databricks** — real Unity Catalog over the REST SDK (no compute needed;
+  uses `databricksProfile`). Right-click a table → *Sync This Table* to pull
+  just that table into the local pool (schema or schema+data).
+- **Local warehouse** — reads the pool's Delta **files on disk** directly.
+  Sail's metastore is session-scoped (tables created in one session vanish
+  from the catalog in the next), but the Delta files are durable, so the
+  explorer always shows what actually exists — the same view the lakehouse
+  container gives you. No pool connection required.
+- **Auto** (default) — local when the pool is running, Databricks otherwise.
+
+The Python environment picker is also connection-mode aware: in local mode it
+validates `pysail` + `pyspark` (Sail pool ready), in Databricks mode it
+validates `databricks-connect` and workspace auth — so you always see the
+requirements that actually apply to the mode you picked.
+
 ### Unity Catalog sync
 
 `ucSync.js` spawns `src/python/uc_sync.py` as a one-shot process (deliberately

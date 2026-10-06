@@ -166,8 +166,48 @@ async function updatePythonCommandSetting(document, interpreter) {
     clearResolvedPythonCommandCache();
 }
 
+async function validateLocalPoolEnv(pythonCommand) {
+    const commandParts = resolveCommandParts(pythonCommand);
+
+    if (commandParts.length === 0) {
+        return { ok: false, error: 'Empty python command' };
+    }
+
+    return new Promise((resolve) => {
+        const child = spawn(
+            commandParts[0],
+            [...commandParts.slice(1), '-c', 'import pysail, pyspark; print("LOCAL_POOL_ENV_OK")'],
+            { shell: false }
+        );
+
+        let stderr = '';
+
+        child.stdout.on('data', () => {});
+        child.stderr.on('data', (chunk) => {
+            stderr += chunk.toString();
+        });
+
+        child.on('error', (error) => resolve({ ok: false, error: error.message }));
+        child.on('close', (exitCode) => {
+            if (exitCode === 0) {
+                resolve({ ok: true });
+                return;
+            }
+
+            const missing = /No module named '([^']+)'/.exec(stderr);
+            resolve({
+                ok: false,
+                error: missing
+                    ? `Missing package: ${missing[1]}`
+                    : stderr.trim().split('\n').slice(-1)[0] || 'Local pool packages missing',
+            });
+        });
+    });
+}
+
 async function selectPythonEnvironment(document) {
     const candidates = await discoverPythonCandidates(document);
+    const isLocal = getConfiguration().connectionMode === 'local';
 
     if (candidates.length === 0) {
         void vscode.window.showWarningMessage(
@@ -183,15 +223,20 @@ async function selectPythonEnvironment(document) {
     const items = [];
 
     for (const candidate of candidates) {
-        const validation = await validateDatabricksConnect(candidate, cwd);
+        // Validate for the ACTIVE connection mode: Jupyter-style plain env
+        // listing would hide real problems, but validating databricks-connect
+        // while in local mode (or pysail in databricks mode) misleads.
+        const validation = isLocal
+            ? await validateLocalPoolEnv(candidate)
+            : await validateDatabricksConnect(candidate, cwd);
 
         items.push({
             label: validation.ok
                 ? '$(check) ' + candidate
                 : '$(warning) ' + candidate,
             description: validation.ok
-                ? 'Databricks Connect available'
-                : 'Databricks Connect missing',
+                ? (isLocal ? 'Sail pool ready' : 'Databricks Connect available')
+                : (isLocal ? 'Pool packages missing' : 'Databricks Connect missing'),
             detail: validation.ok ? 'Recommended' : validation.error,
             interpreter: candidate,
             ok: validation.ok,
@@ -201,8 +246,10 @@ async function selectPythonEnvironment(document) {
     items.sort((left, right) => Number(right.ok) - Number(left.ok));
 
     const picked = await vscode.window.showQuickPick(items, {
-        title: 'Select Databricks Python Environment',
-        placeHolder: 'Choose the interpreter used to run Databricks notebook cells',
+        title: isLocal ? 'Select Python Environment (local pool)' : 'Select Databricks Python Environment',
+        placeHolder: isLocal
+            ? 'Choose the interpreter the local pool runs on (needs pysail + pyspark)'
+            : 'Choose the interpreter used to run Databricks notebook cells',
         matchOnDescription: true,
         matchOnDetail: true,
     });
@@ -616,6 +663,7 @@ module.exports = {
     promptForPythonEnvironmentPath,
     runPythonScript,
     validateDatabricksConnect,
+    validateLocalPoolEnv,
     getCachedConnectValidation,
     createDatabricksChildEnv,
     resolveCommandParts,

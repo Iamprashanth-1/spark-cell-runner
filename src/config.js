@@ -14,6 +14,7 @@ function getConfiguration() {
         useServerless: configuration.get('useServerless', false),
         connectionMode: configuration.get('connectionMode', 'databricks'),
         localPool: configuration.get('localPool', ''),
+        ucExplorerSource: configuration.get('ucExplorerSource', 'auto'),
         workspacePathMappings: configuration.get('workspacePathMappings', {}),
         secretValues: configuration.get('secretValues', {}),
         widgetValues: configuration.get('widgetValues', {}),

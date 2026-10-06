@@ -9,6 +9,9 @@ const state = {
   // Sidebar refresh handle returned by registerDatabricksSidebar().
   configurationTree: undefined,
 
+  // Unity Catalog / warehouse explorer tree refresh handle.
+  unityCatalogTree: undefined,
+
   // Fired whenever run state changes so CodeLens values refresh.
   codeLensChangeEmitter: undefined,
 

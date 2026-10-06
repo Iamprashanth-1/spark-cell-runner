@@ -2,7 +2,7 @@
   "name": "spark-cell-runner",
   "displayName": "Spark Cell Runner",
   "description": "Companion commands for running Databricks notebook-source Python cells from VS Code.",
-  "version": "0.4.1",
+  "version": "0.5.3",
   "publisher": "PrashanthReddyMunagala",
   "license": "MIT",
   "engines": {
@@ -215,6 +215,41 @@
         "command": "sparkCellRunner.configuration.copyValue",
         "title": "Copy Value",
         "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.ucExplorer.refresh",
+        "title": "Refresh Explorer",
+        "icon": "$(refresh)",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.ucExplorer.switchSource",
+        "title": "Switch Explorer Source",
+        "icon": "$(arrow-swap)",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.ucExplorer.copyName",
+        "title": "Copy Name",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.ucExplorer.syncTable",
+        "title": "Sync This Table",
+        "icon": "$(cloud-download)",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.ucExplorer.openWarehouse",
+        "title": "Open Warehouse Folder",
+        "icon": "$(folder-opened)",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.ucExplorer.previewTable",
+        "title": "Preview Data",
+        "icon": "$(open-preview)",
+        "category": "Spark Cell Runner"
       }
     ],
     "menus": {
@@ -255,6 +290,21 @@
           "command": "sparkCellRunner.refreshConfiguration",
           "group": "navigation@1",
           "when": "view == sparkCellRunner.configurationView"
+        },
+        {
+          "command": "sparkCellRunner.ucExplorer.switchSource",
+          "group": "navigation@1",
+          "when": "view == sparkCellRunner.unityCatalogView"
+        },
+        {
+          "command": "sparkCellRunner.ucExplorer.refresh",
+          "group": "navigation@2",
+          "when": "view == sparkCellRunner.unityCatalogView"
+        },
+        {
+          "command": "sparkCellRunner.ucExplorer.openWarehouse",
+          "group": "navigation@3",
+          "when": "view == sparkCellRunner.unityCatalogView"
         }
       ],
       "view/item/context": [
@@ -277,6 +327,21 @@
           "command": "sparkCellRunner.configuration.copyValue",
           "group": "9_copy@1",
           "when": "view == sparkCellRunner.configurationView"
+        },
+        {
+          "command": "sparkCellRunner.ucExplorer.syncTable",
+          "group": "inline@1",
+          "when": "view == sparkCellRunner.unityCatalogView && viewItem == uc-table"
+        },
+        {
+          "command": "sparkCellRunner.ucExplorer.copyName",
+          "group": "9_copy@1",
+          "when": "view == sparkCellRunner.unityCatalogView"
+        },
+        {
+          "command": "sparkCellRunner.ucExplorer.previewTable",
+          "group": "inline@0",
+          "when": "view == sparkCellRunner.unityCatalogView && viewItem == uc-table-local"
         }
       ]
     },
@@ -408,6 +473,17 @@
           "default": false,
           "scope": "resource",
           "description": "When enabled, .py files are automatically opened in the Databricks notebook view. When disabled, .py files open as plain text."
+        },
+        "sparkCellRunner.ucExplorerSource": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "local",
+            "databricks"
+          ],
+          "default": "auto",
+          "scope": "resource",
+          "description": "Unity Catalog explorer source: 'auto' explores the local pool when it is running and Databricks otherwise."
         }
       }
     },
@@ -425,6 +501,11 @@
         {
           "id": "sparkCellRunner.configurationView",
           "name": "Configuration",
+          "type": "tree"
+        },
+        {
+          "id": "sparkCellRunner.unityCatalogView",
+          "name": "Unity Catalog",
           "type": "tree"
         }
       ]

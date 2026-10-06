@@ -17,6 +17,7 @@ const vscode = require('vscode');
 const state = require('./state');
 const { getConfiguration, clearConnectValidationCache } = require('./config');
 const { registerConfigurationTree } = require('./ui/configurationTree');
+const { registerUnityCatalogTree } = require('./ui/unityCatalogTree');
 const { initStatusBar, updateStatusBar, getActiveDatabricksUri } = require('./ui/statusBar');
 const decorations = require('./ui/decorations');
 const { disposeResultPanel } = require('./ui/resultPanel');
@@ -40,6 +41,7 @@ function activate(context) {
   state.output = output;
   context.subscriptions.push(output);
   state.configurationTree = registerConfigurationTree(context);
+  state.unityCatalogTree = registerUnityCatalogTree(context, output);
   initStatusBar(context);
   decorations.createRunDecorations();
   state.codeLensChangeEmitter = new vscode.EventEmitter();

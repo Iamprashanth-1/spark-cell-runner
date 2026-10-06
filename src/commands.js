@@ -548,7 +548,7 @@ function registerCommands(context, output) {
   // ----- Unity Catalog sync -----
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('sparkCellRunner.syncUnityCatalog', async (modeOverride) => {
+    vscode.commands.registerCommand('sparkCellRunner.syncUnityCatalog', async (modeOverride, overrides) => {
       const configuration = getConfiguration();
       const pool = poolManager.getPool(configuration.localPool);
 
@@ -908,6 +908,104 @@ function registerCommands(context, output) {
       await vscode.commands.executeCommand(
         status && status.running ? 'sparkCellRunner.stopLakehouseContainer' : 'sparkCellRunner.launchLakehouseContainer'
       );
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.ucExplorer.openWarehouse', async () => {
+      const configuration = getConfiguration();
+      const pool = poolManager.getPool(configuration.localPool);
+
+      if (!pool) {
+        void vscode.window.showInformationMessage('No local Spark pool is selected.');
+        return;
+      }
+
+      await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(pool.warehousePath));
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.ucExplorer.previewTable', async (item) => {
+      const payload = item && item.payload;
+
+      if (!payload || !payload.localTableDir) {
+        void vscode.window.showInformationMessage(
+          'Preview reads the local warehouse. For Databricks tables, sync the table first, then expand its local copy.'
+        );
+        return;
+      }
+
+      const configuration = getConfiguration();
+      const pool = poolManager.getPool(configuration.localPool);
+
+      if (!pool) {
+        void vscode.window.showErrorMessage('No local Spark pool is selected.');
+        return;
+      }
+
+      if (!(await poolManager.isPoolServing(pool))) {
+        const start = await vscode.window.showWarningMessage(
+          `Local Spark pool "${pool.name}" is not running. Start it now?`,
+          'Start Pool'
+        );
+        if (start !== 'Start Pool') {
+          return;
+        }
+        await startPoolWithFeedback(pool);
+      }
+
+      const commandParts = pythonEnv.resolveCommandParts(
+        poolManager.resolveSessionPythonCommand(configuration.pythonCommand, configuration)
+      );
+      const scriptPath = path.join(__dirname, 'python', 'preview_table.py');
+
+      try {
+        const csvText = await vscode.window.withProgress(
+          { location: vscode.ProgressLocation.Notification, title: 'Previewing table rows...' },
+          () => new Promise((resolve, reject) => {
+            const child = require('node:child_process').spawn(
+              commandParts[0],
+              [...commandParts.slice(1), scriptPath, '--pool', `sc://127.0.0.1:${pool.port}`, '--path', payload.localTableDir, '--limit', '50'],
+              { shell: false, windowsHide: true }
+            );
+
+            let stdout = '';
+            child.stdout.on('data', (chunk) => {
+              stdout += chunk.toString();
+            });
+            child.on('error', reject);
+            child.on('close', () => {
+              try {
+                const message = JSON.parse(stdout.trim().split('\n').filter(Boolean).pop() || '{}');
+                if (message.type === 'error') {
+                  reject(new Error(message.message));
+                  return;
+                }
+                resolve(message);
+              } catch (error) {
+                reject(error);
+              }
+            });
+          })
+        );
+
+        state.output.show(true);
+        state.output.appendLine(
+          `[preview] ${payload.copyValue || payload.localTableDir}: showing ${csvText.shown} of ${csvText.totalRows} rows`
+        );
+
+        const header = `-- Preview: ${payload.copyValue || payload.localTableDir}\n-- ${csvText.shown} of ${csvText.totalRows} rows\n\n`;
+        const document = await vscode.workspace.openTextDocument({
+          content: header + csvText.csv,
+          language: 'csv',
+        });
+        await vscode.window.showTextDocument(document, { preview: true });
+      } catch (error) {
+        void vscode.window.showErrorMessage(
+          `Preview failed: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
     }),
   );
 

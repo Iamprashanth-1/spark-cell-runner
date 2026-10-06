@@ -8,5 +8,6 @@
   "sparkCellRunner.openPyFilesAsNotebook": true,
   "sparkCellRunner.connectionMode": "local",
   "sparkCellRunner.localPool": "local",
-  "sparkCellRunner.useServerless": false
+  "sparkCellRunner.useServerless": false,
+  "sparkCellRunner.ucExplorerSource": "local"
 }

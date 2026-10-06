@@ -13,9 +13,9 @@ function buildSyncArgs(configuration, pool, overrides = {}) {
   const args = [
     '--pool', `sc://127.0.0.1:${pool.port}`,
     '--mode', overrides.mode || configuration.syncMode || 'schema',
-    '--catalog', configuration.syncCatalog || '',
-    '--schema', configuration.syncSchema || '',
-    '--tables', configuration.syncTables || '',
+    '--catalog', overrides.catalog !== undefined ? overrides.catalog : configuration.syncCatalog || '',
+    '--schema', overrides.schema !== undefined ? overrides.schema : configuration.syncSchema || '',
+    '--tables', overrides.tables !== undefined ? overrides.tables : configuration.syncTables || '',
     '--limit', String(configuration.syncRowLimit || 0),
   ];
 
