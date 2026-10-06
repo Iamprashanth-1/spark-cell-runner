@@ -132,7 +132,7 @@ async function runSqlOnPool(sqlText, { limit = 200 } = {}) {
   return new Promise((resolve, reject) => {
     const child = require('node:child_process').spawn(
       commandParts[0],
-      [...commandParts.slice(1), scriptPath, '--pool', `sc://127.0.0.1:${pool.port}`, '--limit', String(limit)],
+      [...commandParts.slice(1), scriptPath, '--pool', `sc://127.0.0.1:${pool.port}`, '--limit', String(limit), '--warehouse', poolManager.getWarehouseRoot() + '/' + pool.name],
       { shell: false, windowsHide: true }
     );
 

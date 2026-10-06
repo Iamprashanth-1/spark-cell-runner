@@ -2,7 +2,7 @@
   "name": "spark-cell-runner",
   "displayName": "Spark Cell Runner",
   "description": "Companion commands for running Databricks notebook-source Python cells from VS Code.",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "publisher": "PrashanthReddyMunagala",
   "license": "MIT",
   "engines": {

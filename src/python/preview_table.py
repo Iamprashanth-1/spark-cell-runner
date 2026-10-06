@@ -13,7 +13,10 @@ import argparse
 import csv
 import io
 import json
+import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
 def fail(message):

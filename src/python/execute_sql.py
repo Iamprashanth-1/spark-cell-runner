@@ -18,7 +18,11 @@ import argparse
 import csv
 import io
 import json
+import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from warehouse_registry import register_warehouse_tables
 
 
 def emit(payload):
@@ -115,6 +119,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--pool', required=True, help='sc://host:port of the local pool')
     parser.add_argument('--limit', type=int, default=200, help='max rows captured per statement')
+    parser.add_argument('--warehouse', default='', help='warehouse dir of the active pool to register tables from')
     args = parser.parse_args()
 
     sql_text = sys.stdin.read()
@@ -131,6 +136,15 @@ def main():
         spark = SparkSession.builder.remote(args.pool).getOrCreate()
     except Exception as error:
         return fail(f'Could not connect to the local pool: {error}')
+
+    # Re-register on-disk warehouse tables so schema.table names resolve.
+    if args.warehouse:
+        try:
+            registered, _skipped = register_warehouse_tables(spark, args.warehouse)
+            if registered:
+                emit({"type": "progress", "message": f"registered {len(registered)} warehouse table(s) into the session"})
+        except Exception:
+            pass
 
     statements = split_statements(sql_text)
     executed = 0

@@ -1123,14 +1123,16 @@ function registerCommands(context, output) {
         return;
       }
 
-      // Local tables are queried by Delta path (Sail's metastore is
-      // session-scoped); Databricks tables by three-part name.
-      const target = payload.localTableDir
-        ? 'delta.`' + payload.localTableDir.replace(/\\/g, '/') + '`'
-        : payload.copyValue;
+      // Named queries (sail.schema.table) resolve because the extension
+      // re-registers on-disk warehouse tables into every session it starts.
+      // The Delta path is kept as a comment fallback.
+      const named = payload.copyValue;
+      const fallback = payload.localTableDir
+        ? '-- fallback: SELECT * FROM delta.`' + payload.localTableDir.replace(/\\/g, '/') + '` LIMIT 100;'
+        : undefined;
 
       const document = await vscode.workspace.openTextDocument({
-        content: `-- Querying ${payload.copyValue}\n-- Run with the CodeLens above, or right-click → "Run Selected SQL on Pool"\nSELECT *\nFROM ${target}\nLIMIT 100;\n`,
+        content: `-- Querying ${named}\n-- Run with the CodeLens above, or right-click → "Run Selected SQL on Pool"\n${fallback ? fallback + '\n' : ''}SELECT *\nFROM ${named}\nLIMIT 100;\n`,
         language: 'sql',
       });
       await vscode.window.showTextDocument(document, { preview: true });
