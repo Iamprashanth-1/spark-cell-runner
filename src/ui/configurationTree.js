@@ -63,11 +63,13 @@ class ConfigurationTreeProvider {
       icon: 'plug',
       command: { command: 'sparkCellRunner.setConnectionMode', title: 'Set Connection Mode' },
       tooltip: 'Switch between Databricks Connect and a local Spark pool',
+      contextValue: 'connection',
+      payload: { copyValue: isLocal ? 'local' : 'databricks' },
     }));
 
     if (isLocal) {
       // ---- Local pool component ----
-      const poolRow = row({
+      rows.push(row({
         label: 'Spark Pool',
         description: activePool
           ? `${activePool.name} — ${activePool.running ? `running on :${activePool.port}` : 'stopped'}`
@@ -81,8 +83,11 @@ class ConfigurationTreeProvider {
         tooltip: activePool
           ? `Engine: ${activePool.engine}\nWarehouse: ${activePool.warehousePath}`
           : 'Create a pool to run Spark fully offline',
-      });
-      rows.push(poolRow);
+        contextValue: activePool ? (activePool.running ? 'pool-running' : 'pool-stopped') : 'pool-none',
+        payload: activePool
+          ? { pool: activePool.name, copyValue: `sc://127.0.0.1:${activePool.port}` }
+          : undefined,
+      }));
 
       // ---- Unity Catalog sync component ----
       rows.push(row({
@@ -95,6 +100,7 @@ class ConfigurationTreeProvider {
         icon: 'cloud-download',
         command: { command: 'sparkCellRunner.syncMenu', title: 'Unity Catalog Sync' },
         tooltip: 'Mirror dev Unity Catalog schemas/tables into the local warehouse',
+        contextValue: 'sync',
       }));
     } else {
       // ---- Profile + cluster components (databricks mode) ----
@@ -104,6 +110,8 @@ class ConfigurationTreeProvider {
         icon: 'account',
         command: { command: 'sparkCellRunner.setDatabricksProfile', title: 'Set Databricks Profile' },
         tooltip: 'Profile from ~/.databrickscfg used for authentication',
+        contextValue: 'profile',
+        payload: { copyValue: configuration.databricksProfile || '' },
       }));
 
       const serverless = Boolean(configuration.useServerless);
@@ -115,6 +123,8 @@ class ConfigurationTreeProvider {
           : 'server',
         command: { command: 'sparkCellRunner.setClusterId', title: 'Set Databricks Cluster ID' },
         tooltip: 'Cluster used for Databricks Connect runs',
+        contextValue: 'cluster',
+        payload: { copyValue: serverless ? 'serverless' : configuration.clusterId || '' },
       }));
     }
 
@@ -127,6 +137,8 @@ class ConfigurationTreeProvider {
       tooltip: isLocal
         ? 'Notebook sessions run in the pool environment; this setting matters for Databricks mode and sync'
         : 'Interpreter with databricks-connect installed',
+      contextValue: 'python-env',
+      payload: { copyValue: configuration.pythonCommand || '' },
     }));
 
     // ---- Lakehouse container ----
@@ -140,6 +152,8 @@ class ConfigurationTreeProvider {
         : 'server',
       command: { command: 'sparkCellRunner.containerMenu', title: 'Lakehouse Container' },
       tooltip: 'Browse the pool warehouse from Docker/Podman Desktop',
+      contextValue: containerStatus && containerStatus.running ? 'container-running' : 'container-stopped',
+      payload: { copyValue: `http://localhost:${containerManager.getCachedUiPort()}` },
     }));
 
     // ---- Widgets component (collapsible, Databricks-style children) ----
@@ -151,6 +165,8 @@ class ConfigurationTreeProvider {
         label: widget.label || widget.name,
         description: `${widget.type} • ${widget.value || '(empty)'}`,
         command: { command: 'sparkCellRunner.editWidget', title: 'Edit Widget Value', arguments: [widget.name, widget.type, widget.choices] },
+        contextValue: 'widget',
+        payload: { copyValue: widget.value || '', widget },
       }))
     ));
 
@@ -164,6 +180,7 @@ class ConfigurationTreeProvider {
       icon: 'debug-restart',
       command: { command: 'sparkCellRunner.restartNotebookSession', title: 'Restart Notebook Session' },
       tooltip: 'The persistent Python process keeps state across cells; restart to reset it',
+      contextValue: 'session',
     }));
 
     // ---- Editor behavior ----
@@ -174,13 +191,14 @@ class ConfigurationTreeProvider {
       icon: openAsNotebook ? 'check' : 'circle-large-outline',
       command: { command: 'sparkCellRunner.toggleOpenPyAsNotebook', title: 'Toggle Open .py as Notebook' },
       tooltip: 'When enabled, .py files open in the Databricks notebook view by default',
+      contextValue: 'toggle-open-py',
     }));
 
     return rows;
   }
 }
 
-function row({ label, description, icon, command, tooltip, children }) {
+function row({ label, description, icon, command, tooltip, children, contextValue, payload }) {
   const item = new vscode.TreeItem(label, children
     ? vscode.TreeItemCollapsibleState.Collapsed
     : vscode.TreeItemCollapsibleState.None);
@@ -200,7 +218,13 @@ function row({ label, description, icon, command, tooltip, children }) {
   if (children) {
     item.children = children;
   }
-  item.contextValue = 'sparkCellRunner.configuration.row';
+  // contextValue drives the inline buttons and context menus declared in
+  // package.json (view/item/context); payload carries the data those commands
+  // need (mirrors databricks-vscode's component tree items).
+  item.contextValue = contextValue || 'sparkCellRunner.configuration.row';
+  if (payload) {
+    item.payload = payload;
+  }
   return item;
 }
 

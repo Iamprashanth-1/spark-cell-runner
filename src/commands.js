@@ -875,6 +875,53 @@ function registerCommands(context, output) {
       );
     }),
   );
+
+  // ----- Inline tree-row actions (view/item/context buttons) -----
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.tree.poolToggle', async (item) => {
+      const poolName = item && item.payload && item.payload.pool;
+      if (!poolName) {
+        return;
+      }
+      const pool = poolManager.getPool(poolName);
+      if (!pool) {
+        return;
+      }
+      await vscode.commands.executeCommand(
+        pool.running ? 'sparkCellRunner.stopLocalPool' : 'sparkCellRunner.startLocalPool',
+        poolName
+      );
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.tree.syncRun', async (item) => {
+      const mode = item && item.payload && item.payload.mode;
+      await vscode.commands.executeCommand('sparkCellRunner.syncUnityCatalog', mode);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.tree.containerToggle', async () => {
+      const status = containerManager.getCachedStackStatus();
+      await vscode.commands.executeCommand(
+        status && status.running ? 'sparkCellRunner.stopLakehouseContainer' : 'sparkCellRunner.launchLakehouseContainer'
+      );
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.configuration.copyValue', async (item) => {
+      const value = item && item.payload && item.payload.copyValue;
+      if (!value) {
+        void vscode.window.showInformationMessage('Nothing to copy for this row.');
+        return;
+      }
+      await vscode.env.clipboard.writeText(value);
+      void vscode.window.showInformationMessage(`Copied: ${value}`);
+    }),
+  );
 }
 
 module.exports = { registerCommands };

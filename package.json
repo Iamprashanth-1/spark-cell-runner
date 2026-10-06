@@ -192,6 +192,29 @@
         "title": "Refresh",
         "icon": "$(refresh)",
         "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.tree.poolToggle",
+        "title": "Start/Stop Pool",
+        "icon": "$(debug-start)",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.tree.syncRun",
+        "title": "Run Sync",
+        "icon": "$(sync)",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.tree.containerToggle",
+        "title": "Launch/Stop Container Stack",
+        "icon": "$(server-process)",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.configuration.copyValue",
+        "title": "Copy Value",
+        "category": "Spark Cell Runner"
       }
     ],
     "menus": {
@@ -224,8 +247,35 @@
       ],
       "view/title": [
         {
+          "command": "sparkCellRunner.createLocalPool",
+          "group": "navigation@0",
+          "when": "view == sparkCellRunner.configurationView"
+        },
+        {
           "command": "sparkCellRunner.refreshConfiguration",
           "group": "navigation@1",
+          "when": "view == sparkCellRunner.configurationView"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "sparkCellRunner.tree.poolToggle",
+          "group": "inline@1",
+          "when": "view == sparkCellRunner.configurationView && viewItem =~ /^pool-(running|stopped)$/"
+        },
+        {
+          "command": "sparkCellRunner.tree.syncRun",
+          "group": "inline@1",
+          "when": "view == sparkCellRunner.configurationView && viewItem == sync"
+        },
+        {
+          "command": "sparkCellRunner.tree.containerToggle",
+          "group": "inline@1",
+          "when": "view == sparkCellRunner.configurationView && viewItem =~ /^container-(running|stopped)$/"
+        },
+        {
+          "command": "sparkCellRunner.configuration.copyValue",
+          "group": "9_copy@1",
           "when": "view == sparkCellRunner.configurationView"
         }
       ]
