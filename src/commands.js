@@ -1060,13 +1060,34 @@ function registerCommands(context, output) {
 
       const editor = vscode.window.activeTextEditor;
       if (!editor || editor.document.languageId !== 'sql') {
-        void vscode.window.showInformationMessage('Select some SQL in a .sql file first.');
+        void vscode.window.showInformationMessage('Open a .sql file first.');
         return;
       }
 
       const selection = editor.selection;
-      const sqlText = editor.document.getText(selection.isEmpty ? undefined : selection);
-      await runSql(sqlText, 'run selection');
+
+      // Explicit selection wins (Databricks-style). With no selection, run the
+      // statement under the cursor; an empty document runs the whole file.
+      if (selection.isEmpty) {
+        const statements = sqlRunner.splitStatements(editor.document.getText());
+        const cursorLine = selection.active.line;
+        const current = statements.find((statement, index) => {
+          const endLine = index + 1 < statements.length
+            ? statements[index + 1].startLine - 1
+            : editor.document.lineCount;
+          return cursorLine >= statement.startLine && cursorLine < endLine;
+        });
+
+        if (!current) {
+          void vscode.window.showInformationMessage('No SQL statement found at the cursor.');
+          return;
+        }
+
+        await runSql(current.text, `run statement ${statements.indexOf(current) + 1} (cursor)`);
+        return;
+      }
+
+      await runSql(editor.document.getText(selection), 'run selection');
     }),
   );
 

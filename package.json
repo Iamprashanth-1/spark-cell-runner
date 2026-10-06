@@ -2,7 +2,7 @@
   "name": "spark-cell-runner",
   "displayName": "Spark Cell Runner",
   "description": "Companion commands for running Databricks notebook-source Python cells from VS Code.",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "publisher": "PrashanthReddyMunagala",
   "license": "MIT",
   "engines": {
@@ -545,7 +545,19 @@
           "type": "tree"
         }
       ]
-    }
+    },
+    "keybindings": [
+      {
+        "command": "sparkCellRunner.runSqlSelection",
+        "key": "ctrl+enter",
+        "when": "editorTextFocus && editorLangId == sql"
+      },
+      {
+        "command": "sparkCellRunner.runSqlSelection",
+        "key": "shift+enter",
+        "when": "editorTextFocus && editorLangId == sql"
+      }
+    ]
   },
   "dependencies": {
     "@vscode/vsce": "^4.0.0"
