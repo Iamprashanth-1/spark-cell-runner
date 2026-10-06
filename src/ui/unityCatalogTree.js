@@ -5,6 +5,7 @@
 //   databricks — catalogs/schemas/tables of the workspace over the REST SDK
 // Root rows are catalogs; expanding descends schemas -> tables -> columns.
 
+const fs = require('node:fs');
 const path = require('node:path');
 const vscode = require('vscode');
 const poolManager = require('../poolManager');
