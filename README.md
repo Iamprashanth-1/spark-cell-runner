@@ -1,25 +1,116 @@
-# Spark Cell Runner (VS Code extension)
+<div align="center">
 
-Run **Databricks notebook-source `.py` files** (and `.ipynb` notebooks)
-cell-by-cell from VS Code — against a remote Databricks workspace through
-**Databricks Connect**, or **fully offline** against a **local Spark pool**
-powered by [**Apache Sail™ (lakehq/sail)**](https://github.com/lakehq/sail), a
-Rust-based Spark engine that speaks the **Spark Connect** protocol natively.
-Both modes give you a Jupyter-like experience backed by persistent
-per-notebook Python sessions, with a Databricks compatibility shim so
-notebook code runs unchanged.
+<img src="media/icon.png" width="72" alt="Spark Cell Runner" />
+
+# Spark Cell Runner
+
+**Run Databricks notebook-source files and SQL in VS Code — on Databricks, or fully offline on a local Spark pool.**
+
+[![Version](https://img.shields.io/badge/version-0.6.5-blue)](package.json)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![VS Code](https://img.shields.io/badge/VS%20Code-1.86%2B-007ACC?logo=visualstudiocode&logoColor=white)](https://code.visualstudio.com)
+[![Engine](https://img.shields.io/badge/engine-Sail%20%7C%20Databricks-FF3621)](https://github.com/lakehq/sail)
+
+*Persistent per-notebook Python sessions, a Databricks compatibility shim, and a
+local [Sail](https://github.com/lakehq/sail) Spark pool for offline development.*
+
+</div>
+
+---
+
+## Table of Contents
+
+- [Why](#why)
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Architecture](#architecture)
+  - [Run Pipeline](#run-pipeline)
+  - [Local Spark Pools](#local-spark-pools)
+  - [Why Sail?](#why-sail)
+  - [Unity Catalog Explorer](#unity-catalog-explorer)
+  - [Unity Catalog Sync](#unity-catalog-sync)
+  - [SQL Execution](#sql-execution)
+  - [Lakehouse Container](#lakehouse-container)
+  - [Data and State on Disk](#data-and-state-on-disk)
+- [Configuration](#configuration)
+- [Commands](#commands)
+- [Examples](#examples)
+- [Project Layout](#project-layout)
+- [Build and Install](#build-and-install)
+- [Development and Testing](#development-and-testing)
+- [Publishing to the Marketplace](#publishing-to-the-marketplace)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Why
+
+Databricks notebook development usually means one of two things: a browser you
+keep switching to, or `databricks-connect` that fails the moment a serverless
+endpoint is unreachable or you're on a train.
+
+**Spark Cell Runner** gives you a third option — a local, Jupyter-like
+experience inside VS Code with two interchangeable backends:
+
+| | **Databricks mode** | **Local pool mode** |
+| --- | --- | --- |
+| Engine | Databricks serverless / cluster via `databricks-connect` | [Sail](https://github.com/lakehq/sail) Spark Connect server on `localhost` |
+| Network | Cloud required | **Fully offline** |
+| Compute | Real Databricks compute | Single Rust process, ~1 s startup |
+| Tables | Real Unity Catalog | Local Delta warehouse on disk |
+
+Same notebook code, same compatibility shim, either backend.
+
+## Features
+
+- **Cell-level execution** of Databricks notebook-source `.py` files (and
+  `.ipynb`): run current cell, all cells, run-to-cursor, with per-cell
+  decorations, CodeLenses, and a results panel.
+- **Two connection modes** — Databricks (serverless/cluster) or a local Spark
+  pool that needs no cloud access at all.
+- **Databricks compatibility shim** — `%sql` / `%sh` / `%pip` / `%fs` / `%md`
+  magics, `%run` expansion, `dbutils` proxies (widgets, secrets, fs, notebook,
+  library), `/Workspace/` and `/Volumes/` path translation.
+- **Local Spark pools** — named Sail servers with manifests, logs, lifecycle
+  control, and isolated warehouses, managed entirely from the sidebar.
+- **Unity Catalog explorer** — browse catalogs/schemas/tables/columns from
+  Databricks (REST) or the local warehouse (disk), with table previews.
+- **Unity Catalog sync** — mirror dev schemas/tables into the local warehouse
+  (schema-only, or schema + data with a row limit).
+- **SQL execution** — run `.sql` files, selections, or statements on the pool
+  (Ctrl+Enter), with results in the output channel.
+- **Lakehouse container** — expose the warehouse to Docker/Podman Desktop as a
+  browsable UI.
+- **SQL-aware environment picker** — validates the interpreter for the active
+  mode (pysail + pyspark locally, databricks-connect in the cloud).
+
+## Quick Start
+
+1. Install the `.vsix` (see [Build and Install](#build-and-install)) and open
+   the **Spark Cell Runner** view in the activity bar.
+2. Pick a Python environment — a venv with `databricks-connect` for cloud
+   mode, or any venv for local mode (the extension offers to install
+   `pysail` + `pyspark-client` into it).
+3. In the **Configuration** panel, choose a connection:
+   - **Databricks** — set your cluster ID or enable serverless (needs a
+     `~/.databrickscfg` profile).
+   - **Local pool** — create a pool, start it, develop offline.
+4. Open any notebook from [`examples/`](examples/README.md) and run cells —
+   or open a `.sql` file and hit **Ctrl+Enter**.
+
+## Architecture
 
 ```text
                           VS Code (this extension)
   ┌────────────────────────────────────────────────────────────────┐
-  │  notebook editor / .py source     sidebar webview   commands   │
-  │        │                                │                │      │
-  │        ▼                                ▼                │      │
-  │   scriptBuilder ──► session (JSON over stdio) ◄──── ─────┘      │
-  │                          │                                      │
+  │  notebook editor / .py source   Configuration tree   commands   │
+  │        │                              │                │       │
+  │        ▼                              ▼                │       │
+  │   scriptBuilder ──► session (JSON over stdio) ◄──── ──┘       │
+  │                          │                                    │
   │                     session_driver.py (persistent python proc) │
-  │                          │   bootstrap.py + runtime_data.py     │
-  └──────────────────────────┼──────────────────────────────────────┘
+  │                          │   bootstrap.py + runtime_data.py    │
+  └──────────────────────────┼─────────────────────────────────────┘
                              │
         ┌────────────────────┴─────────────────────┐
         ▼ databricks-connect                       ▼ Spark Connect (sc://127.0.0.1:<port>)
@@ -32,40 +123,7 @@ notebook code runs unchanged.
                               (local Delta tables)             stack (FileBrowser UI)
 ```
 
-## Features
-
-- **Cell-level execution** of Databricks notebook-source files: run current
-  cell, run all, run-to-cursor, with per-cell decorations, CodeLenses, and a
-  results panel (stdout / stderr / generated script).
-- **Two connection modes**: Databricks (serverless or cluster via
-  databricks-connect) or a **local Spark pool** that needs no cloud access.
-- **Databricks compatibility shim**: `%sql` / `%sh` / `%pip` / `%fs` / `%md`
-  magics, `%run` expansion, `dbutils` proxies (widgets, secrets, fs,
-  notebook, library), `/Workspace/...` and `/Volumes/...` path translation.
-- **Local Spark pools**: named Sail servers with manifests, logs, lifecycle
-  control, and warehouse isolation — all managed from the sidebar.
-- **Unity Catalog sync**: mirror dev catalogs/schemas/tables into the local
-  warehouse (schema-only, or schema + data with a row limit).
-- **Lakehouse container**: expose the warehouse to Docker/Podman Desktop as a
-  browsable web UI.
-
-## Quick start
-
-1. Install the `.vsix` (see *Build and install* below) and open the
-   **Spark Cell Runner** view in the activity bar.
-2. Pick a Python environment (a venv with `databricks-connect` for cloud
-   mode, or any venv for local mode — the extension offers to install
-   `pysail` + `pyspark-client` into it).
-3. Choose a connection mode in the sidebar's **Connection** section:
-   - **Databricks** — set your cluster ID or enable serverless; needs a
-     `~/.databrickscfg` profile.
-   - **Local pool** — click *Create a local pool*, pick the venv and port,
-     then *Start*. Runs are fully offline.
-4. Open a notebook-source `.py` file and run cells.
-
-## Architecture
-
-### Run pipeline
+### Run Pipeline
 
 1. **Parsing** (`parser.js`) — notebook-source `.py` files are split into
    cells on `# COMMAND ----------` separators; `# MAGIC` lines are decoded
@@ -73,7 +131,7 @@ notebook code runs unchanged.
 2. **Script building** (`scriptBuilder.js`) — each run compiles a flat
    Python script: prior-cell context (or replay of executed cells),
    translated magics, and expanded `%run` includes (parsed recursively and
-   cached in `state.globalIncludeCache`).
+   cached).
 3. **Session** (`session.js` + `src/python/session_driver.py`) — one
    long-lived Python process per notebook, speaking a JSON-line protocol over
    stdio (`{"type":"exec","id","code"}` → `{"type":"result","id","ok",...}`).
@@ -81,10 +139,10 @@ notebook code runs unchanged.
    notebook URI and a **config signature** (interpreter, profile, cluster,
    connection mode, pool) — changing any of those transparently recycles the
    process. In local mode the session runs in the pool's environment, so the
-   interpreter shown in the status bar may differ from `pythonCommand`.
-4. **Bootstrap** (`src/python/bootstrap.py`, assembled by `pyResources.js`)
-   — executed inside the session on first use. It creates `spark`/`sql`
-   (either `DatabricksSession.builder...` or
+   interpreter may differ from the general `pythonCommand` setting.
+4. **Bootstrap** (`src/python/bootstrap.py`, assembled by `pyResources.js`) —
+   executed inside the session on first use. It creates `spark`/`sql` (either
+   `DatabricksSession.builder...` or
    `SparkSession.builder.remote("sc://127.0.0.1:<port>")` depending on
    `connectionMode`), installs the `dbutils` proxies, and monkeypatches
    `builtins.open` / `os.path` so Databricks-style paths resolve to mapped
@@ -93,8 +151,7 @@ notebook code runs unchanged.
    output is captured per cell into decorations and a results webview; the
    generated script and result text are written under `tempFolder`.
 
-The session's wire protocol (JSON lines over stdio, defined by
-`session_driver.py` and `session.js`) is deliberately tiny:
+The session wire protocol (JSON lines over stdio) is deliberately tiny:
 
 ```text
 --> {"type": "exec", "id": 3, "code": "<base64 python>"}
@@ -104,47 +161,10 @@ The session's wire protocol (JSON lines over stdio, defined by
 ```
 
 Because both sides of the connection live in the selected Python environment,
-the protocol is the only coupling point — swapping the Spark engine (Sail vs
-Databricks) or the connection mode never changes it.
+the protocol is the only coupling point — swapping the engine or the
+connection mode never changes it.
 
-### Data and state on disk
-
-```text
-~/.spark-cell-runner/
-  pools/
-    <name>.json          Pool manifests (engine, env, port, warehouse, pid)
-    logs/<name>.log      Sail server stdout/stderr per pool
-  warehouse/
-    <pool>/              Local Delta warehouse of that pool
-      docker-compose.yml Generated lakehouse container stack
-      .filebrowser.db    FileBrowser login database (container stack)
-      .filebrowser-credentials.txt
-                         Generated UI login, re-applied on every launch
-      demo/...           Schemas and Delta tables written by notebooks
-```
-
-Everything above lives outside the workspace, so pools are shared across
-projects and survive VS Code restarts. Generated scripts and result text
-per workspace go to `<workspace>/sparkCellRunner.tempFolder` (default
-`.spark-cell-runner/`).
-
-## Examples
-
-Runnable sample notebooks live in [`examples/`](examples/README.md):
-
-- `01_hello_spark.py` — first Spark session, DataFrames, SQL (works in both modes).
-- `02_local_delta_warehouse.py` — schemas and Delta tables in the local warehouse.
-- `03_dbutils_and_widgets.py` — widgets, `dbutils.fs`, `display()`, secrets shim.
-- `04_uc_sync_query.py` — querying tables synced from Unity Catalog, offline.
-- `05_notebook_with_run.py` + `05_shared_utils.py` — `%run` includes.
-
-Open any of them with *Spark Cell Runner: Open as Databricks Notebook* and
-run cell-by-cell.
-
-Python compatibility floor: **3.10** (all resources are compile-checked
-against it).
-
-### Local Spark pools
+### Local Spark Pools
 
 A pool is a detached Sail Spark Connect server
 (`python -m pysail spark server --ip 127.0.0.1 --port <port>`) plus a JSON
@@ -169,16 +189,12 @@ manifest in `~/.spark-cell-runner/pools/<name>.json`:
   warehouse creation), start (health-checked by probing the Spark Connect
   port), stop (PID kill, `taskkill /T /F` on Windows), and per-pool logs.
 - The server's working directory is pinned to its warehouse, so managed
-  tables and `spark-warehouse/` defaults land inside the pool's own folder.
-- `bootstrap.py` sets `spark.sql.warehouse.dir` to the warehouse path, so
-  `saveAsTable` writes local Delta tables. Schema must exist first
-  (`CREATE SCHEMA IF NOT EXISTS ...`), matching Databricks behavior.
-- Pools are selected via `sparkCellRunner.localPool`; the sidebar card shows
-  status and offers start/stop/logs/delete/switch. Installing `pysail`
-  happens into a venv you choose (never silently into a random interpreter).
+  tables land inside the pool's own folder.
 - In local mode, notebook sessions deliberately run in the **pool's own
-  Python environment** — that's where the matching `pyspark` client lives —
-  regardless of the general `pythonCommand` setting.
+  Python environment** — that's where the matching `pyspark` client lives.
+- A **warehouse registry** (`src/python/warehouse_registry.py`) re-registers
+  on-disk Delta tables into every session, so `sail.<schema>.<table>` named
+  queries resolve even though Sail's metastore is session-scoped.
 
 ### Why Sail?
 
@@ -188,36 +204,33 @@ The local pool runs **[Sail](https://github.com/lakehq/sail)** (PyPI package
 - **No JVM, no cluster** — Sail is a single Rust process installed with
   `pip install pysail`; a pool starts serving Spark Connect in about a second.
 - **Spark Connect protocol** — notebook sessions are ordinary PySpark clients
-  (`SparkSession.builder.remote("sc://127.0.0.1:<port>")`), the same protocol
-  Databricks uses, so cell code stays engine-agnostic.
+  (`SparkSession.builder.remote(...)`), the same protocol Databricks uses, so
+  cell code stays engine-agnostic.
 - **Delta tables on local disk** — Sail writes Delta-format tables into the
-  pool's warehouse directory; that's what the lakehouse container browses and
-  what UC sync populates.
+  pool's warehouse directory; that's what the explorer reads and what the
+  lakehouse container browses.
 - **Swappable by design** — the pool manifest records `engine`, and the
   bootstrap only needs a Spark Connect endpoint, so a future pool can point
   at any Spark-Connect-compatible engine without touching notebook code.
 
-### Unity Catalog explorer
+> **Known limitation:** Sail's metastore is session-scoped. `CREATE SCHEMA`
+> / `saveAsTable` names are lost when the pool restarts — but the Delta files
+> are durable, and the warehouse registry + explorer + sync all read from
+> disk. For stable names, write to explicit paths
+> (`df.write.format('delta').save('hello.db/mytable')`).
 
-A second tree view, **Unity Catalog**, browses catalogs/schemas/tables/columns
-from one of two sources — switch with the swap button in the view title:
+### Unity Catalog Explorer
 
-- **Databricks** — real Unity Catalog over the REST SDK (no compute needed;
-  uses `databricksProfile`). Right-click a table → *Sync This Table* to pull
-  just that table into the local pool (schema or schema+data).
-- **Local warehouse** — reads the pool's Delta **files on disk** directly.
-  Sail's metastore is session-scoped (tables created in one session vanish
-  from the catalog in the next), but the Delta files are durable, so the
-  explorer always shows what actually exists — the same view the lakehouse
-  container gives you. No pool connection required.
+A lazy tree view browsing catalogs/schemas/tables/columns from one of two
+sources (switch with the swap button in the view title):
+
+- **Databricks** — real Unity Catalog over the REST SDK (no compute needed).
+  Right-click a table → *Sync This Table* to pull just that table locally.
+- **Local warehouse** — reads the pool's Delta files **directly from disk**,
+  so it always shows what actually exists, even when the pool is stopped.
 - **Auto** (default) — local when the pool is running, Databricks otherwise.
 
-The Python environment picker is also connection-mode aware: in local mode it
-validates `pysail` + `pyspark` (Sail pool ready), in Databricks mode it
-validates `databricks-connect` and workspace auth — so you always see the
-requirements that actually apply to the mode you picked.
-
-### Unity Catalog sync
+### Unity Catalog Sync
 
 `ucSync.js` spawns `src/python/uc_sync.py` as a one-shot process (deliberately
 separate from notebook sessions). It reads metadata over REST with the
@@ -225,40 +238,57 @@ Databricks SDK and writes to the pool over Spark Connect, streaming JSON
 progress lines back to the extension.
 
 - **schema mode** — recreates catalogs/schemas and *empty* Delta tables with
-  identical columns/types. No cluster needed; notebooks run end-to-end with
-  local data only.
-- **data mode** — additionally copies rows: a Databricks session reads the
-  remote table (honoring `useServerless`/`clusterId`), the pool writes it as
-  Delta. Use `syncRowLimit` for dev-sized samples.
-- Filters (`syncCatalog`, `syncSchema`, `syncTables` glob, mode, limit) are
-  workspace settings, so syncs are reproducible per project.
+  identical columns/types. No cluster needed.
+- **data mode** — additionally copies rows through a Databricks session
+  (honoring `useServerless`/`clusterId`), with an optional row limit.
+- Filters (catalog, schema, table glob, mode, limit) are workspace settings,
+  so syncs are reproducible per project.
 
-### Lakehouse container
+### SQL Execution
+
+- `.sql` files get **CodeLenses** ("Run on pool" per statement, "Run file" at
+  the top) and **Ctrl+Enter / Shift+Enter** keybindings.
+- Select a statement → runs the selection; cursor in a statement → runs that
+  statement; results stream into the Spark Cell Runner output channel as CSV.
+- A failing statement stops the run and reports its real error.
+- Local tables are addressable by name (`sail.<schema>.<table>`) thanks to
+  the warehouse registry, with `delta.\`<path>\`` as the path-based fallback.
+
+### Lakehouse Container
 
 `containerManager.js` detects Docker, then Podman, and generates a Compose
 project `spark-cell-runner-<pool>` that bind-mounts the pool warehouse into
 `filebrowser/filebrowser`. Compute stays native via the pool; no JVM images
-are pulled. Historically this stack used MinIO, which had to be abandoned
-when MinIO revoked anonymous access to its container images (quay.io 401,
-Docker Hub org removed).
-
-When the stack is running:
+are pulled. When the stack runs:
 
 | | |
 | --- | --- |
-| **Warehouse UI URL** | `http://localhost:<port>` (the port is picked automatically at first launch and shown in the sidebar and launch notification) |
+| **Warehouse UI URL** | `http://localhost:<port>` (picked automatically, shown in the launch notification) |
 | **Username** | `admin` |
-| **Password** | Auto-generated on first launch — stored in `<warehouse>/<pool>/.filebrowser-credentials.txt` and shown in the launch notification |
+| **Password** | Auto-generated on first launch — stored in `<warehouse>/<pool>/.filebrowser-credentials.txt` and re-applied on every launch |
 
-> **Why not `admin`/`admin`?** Recent FileBrowser releases generate a random
-> admin password on first boot and require 12+ character passwords, so fixed
-> defaults are rejected. Instead, the extension owns the credentials: it
-> generates a password once, stores it in the credentials file next to the
-> warehouse, and re-applies it to FileBrowser on every launch while the
-> server is stopped. To change the password, edit the `password:` line in the
-> credentials file and relaunch the stack (or change it in the FileBrowser UI
-> — but the next launch re-applies the file's value). The stack listens on
-> localhost only; do not port-forward or share it beyond your machine.
+> Recent FileBrowser releases generate a random admin password on first boot
+> and require 12+ character passwords, so the extension owns the credentials
+> instead of relying on defaults. The stack listens on localhost only.
+
+### Data and State on Disk
+
+```text
+~/.spark-cell-runner/
+  pools/
+    <name>.json          Pool manifests (engine, env, port, warehouse, pid)
+    logs/<name>.log      Sail server stdout/stderr per pool
+  warehouse/
+    <pool>/              Local Delta warehouse of that pool
+      docker-compose.yml Generated lakehouse container stack
+      .filebrowser.db    FileBrowser login database (container stack)
+      .filebrowser-credentials.txt
+                         Generated UI login, re-applied on every launch
+      <schema>.db/...    Schemas and Delta tables written by notebooks
+```
+
+Generated scripts and result text per workspace go to
+`<workspace>/sparkCellRunner.tempFolder` (default `.spark-cell-runner/`).
 
 ## Configuration
 
@@ -272,6 +302,7 @@ When the stack is running:
 | `useServerless` | `false` | Use serverless instead of `clusterId`. |
 | `connectionMode` | `databricks` | `databricks` or `local` (Sail pool). |
 | `localPool` | *(empty)* | Name of the active local pool. |
+| `ucExplorerSource` | `auto` | Unity Catalog explorer source: `auto`, `local`, or `databricks`. |
 | `workspacePathMappings` | `{}` | Map `/Workspace/...`-style paths to local folders. |
 | `secretValues` | `{}` | Local replacements for `dbutils.secrets.get`, keyed `scope/key`. |
 | `widgetValues` | `{}` | Values for `dbutils.widgets`, editable in the sidebar. |
@@ -282,7 +313,7 @@ When the stack is running:
 
 ## Commands
 
-All commands are under the **Spark Cell Runner** category:
+All commands live under the **Spark Cell Runner** category:
 
 | Command | Purpose |
 | --- | --- |
@@ -292,13 +323,31 @@ All commands are under the **Spark Cell Runner** category:
 | `Show Cell Output` | Reopen the results panel for a cell. |
 | `Restart Notebook Session` | Recycle the persistent Python process. |
 | `Select Python Environment` / `Set Python Path` / `Use Active VS Code Interpreter` | Interpreter management. |
-| `Set Cluster ID` / `Toggle Serverless Mode` / `Set Connection Mode` | Connection targets. |
-| `Create / Start / Stop / Delete Local Spark Pool`, `Show Pool Logs` | Pool lifecycle. |
+| `Set Connection Mode` / `Set Cluster ID` / `Toggle Serverless Mode` / `Set Databricks Profile` | Connection targets. |
+| `Create / Start / Stop / Delete Local Spark Pool`, `Show Pool Logs`, `Manage Local Spark Pool` | Pool lifecycle. |
 | `Install Local Pool Packages` | Install `pysail` + `pyspark-client` into a venv you pick. |
+| `Run SQL File on Pool` / `Run Selected SQL on Pool` / `Run Statement on Pool` | SQL execution (also Ctrl+Enter in `.sql` files). |
 | `Sync Unity Catalog to Local Pool` | Schema/data sync from dev UC. |
 | `Launch / Stop Lakehouse Container`, `Open Warehouse UI` | Docker/Podman stack. |
+| `Query Table` / `Preview Data` / `Copy Name` | Unity Catalog explorer actions. |
 
-## Project layout
+## Examples
+
+Runnable sample notebooks live in [`examples/`](examples/README.md):
+
+| Example | Demonstrates |
+| --- | --- |
+| [`01_hello_spark.py`](examples/01_hello_spark.py) | First Spark session, DataFrames, SQL (both modes) |
+| [`02_local_delta_warehouse.py`](examples/02_local_delta_warehouse.py) | Schemas and Delta tables in the local warehouse |
+| [`03_dbutils_and_widgets.py`](examples/03_dbutils_and_widgets.py) | Widgets, `dbutils.fs`, `display()`, secrets shim |
+| [`04_uc_sync_query.py`](examples/04_uc_sync_query.py) | Querying tables synced from Unity Catalog, offline |
+| [`05_notebook_with_run.py`](examples/05_notebook_with_run.py) | `%run` includes with shared functions |
+| [`test.sql`](examples/test.sql) | SQL execution on the pool |
+
+Open any of them with *Spark Cell Runner: Open as Databricks Notebook* and
+run cell-by-cell.
+
+## Project Layout
 
 ```
 src/
@@ -316,78 +365,99 @@ src/
   runner.js           Run orchestration + notebook controllers
   pythonEnv.js        Interpreter discovery, Databricks Connect validation, child env
   poolManager.js      Local Spark pool manifests + Sail server lifecycle
+  sqlRunner.js        SQL execution on the pool + result rendering
   ucSync.js           Unity Catalog -> local pool sync orchestration
   containerManager.js Docker/Podman compose stack (FileBrowser over the warehouse)
   pyResources.js      Loads the Python templates and injects settings
   python/
-    bootstrap.py      Session bootstrap: spark/sql, dbutils proxies, path translation
-    runtime_data.py   Per-run widget/secret/path-mapping values (template)
-    session_driver.py Long-lived python process executing code blocks over stdio
-    uc_sync.py        One-shot UC -> pool sync driver (JSON progress on stdout)
+    bootstrap.py        Session bootstrap: spark/sql, dbutils proxies, path translation
+    runtime_data.py     Per-run widget/secret/path-mapping values (template)
+    session_driver.py   Long-lived python process executing code blocks over stdio
+    uc_sync.py          One-shot UC -> pool sync driver (JSON progress on stdout)
+    uc_explore.py       Catalog/schema/table listing for the explorer (REST or Spark)
+    execute_sql.py      Multi-statement SQL driver for the local pool
+    preview_table.py    Path-based Delta table preview driver
+    warehouse_registry.py Re-registers on-disk Delta tables into each session
   ui/
-    sidebar.js        Activity-bar webview (sections: connection, pools, sync,
-                      lakehouse, widgets, actions; plus a settings view)
-    statusBar.js      Status bar item (interpreter / profile / cluster)
-    decorations.js    Per-cell run state decorations + run-state store
-    resultPanel.js    Results webview (summary / stdout / stderr / script)
+    configurationTree.js Configuration panel (native tree, Databricks-style)
+    unityCatalogTree.js  Unity Catalog / warehouse explorer tree
+    sqlCodeLens.js       Run-on-pool CodeLenses for .sql files
+    statusBar.js         Status bar item (interpreter / profile / cluster)
+    decorations.js       Per-cell run state decorations + run-state store
+    resultPanel.js       Results webview (summary / stdout / stderr / script)
 examples/             Runnable sample notebooks (see examples/README.md)
 test/                 Sample notebooks, UI previews (npm run preview:ui)
 ```
 
-## Build and install the extension
+## Build and Install
 
-Requires Node.js and the [vsce](https://github.com/microsoft/vscode-vsce) CLI
-(one-time setup):
+Requires Node.js and the [vsce](https://github.com/microsoft/vscode-vsce) CLI:
 
 ```bash
 npm install -g @vscode/vsce
+npm run package        # produces spark-cell-runner-0.6.5.vsix
 ```
 
-Build a `.vsix` package from the repo root:
-
-```bash
-npm run package        # or: vsce package
-```
-
-Install it into VS Code (uninstall any older version first so cached assets
-such as the icon refresh cleanly):
+Install (uninstall older versions first so cached assets refresh):
 
 ```bash
 code --uninstall-extension PrashanthReddyMunagala.spark-cell-runner
-code --install-extension spark-cell-runner-0.3.1.vsix
+code --install-extension spark-cell-runner-0.6.5.vsix
 ```
 
-Then fully quit and restart VS Code (not just **Developer: Reload Window**) —
-the Extensions view caches extension icons until a full restart. To uninstall:
+Then fully quit and restart VS Code. To uninstall:
 `code --uninstall-extension PrashanthReddyMunagala.spark-cell-runner`.
 
 > No build/compile step is needed — the extension is plain CommonJS JavaScript
-> plus Python resources in `src/python/`, which `vsce` packages as-is
-> (see `.vscodeignore`).
+> plus Python resources in `src/python/`, which `vsce` packages as-is.
 
-## Development and testing
+## Development and Testing
 
-- `npm run preview:ui` renders the sidebar and results-panel HTML to
-  `test/preview/` — open it in a browser to iterate on the UI with no reload.
+- `npm run preview:ui` renders the configuration tree outline and results
+  panel to `test/preview/` — iterate on UI with no extension reload.
 - **F5** launches an Extension Development Host on the `test/` workspace with
   sample notebooks (widgets, `%sql`, `%run`).
-- JS changes need an extension-host reload (**Ctrl+R** in the dev host);
-  `src/python/*.py` template changes are picked up on the next run.
-- Python resources must stay compatible with **Python 3.10+** — avoid
-  Python-3.12-only f-string syntax (nested same-type quotes) and check with
+- JS changes need an extension-host reload; `src/python/*.py` template
+  changes are picked up on the next run.
+- Python resources must stay compatible with **Python 3.10+** — check with
   `py -3.10 -m py_compile src/python/*.py`.
+- See [PUBLISHING.md](PUBLISHING.md) for the Marketplace release flow.
+
+## Publishing to the Marketplace
+
+One-time setup (publisher, PAT) and the per-release flow are documented in
+[PUBLISHING.md](PUBLISHING.md). In short:
+
+```bash
+npx vsce login PrashanthReddyMunagala   # paste your Marketplace PAT once
+npx vsce publish patch                  # bumps the version, packages, publishes
+```
 
 ## Troubleshooting
 
 | Symptom | Cause / fix |
 | --- | --- |
-| `SyntaxError: f-string: unmatched '('` or similar at bootstrap | The runner environment is older than Python 3.12 and the bootstrap regressed to 3.12-only syntax — update the extension; fixed since 0.3.0. |
-| `NameError: dcr_original_isfile` at bootstrap | Fixed since 0.3.0 (definition was used before assignment). |
-| `Databricks Connect bootstrap unavailable` | The selected env lacks `databricks-connect`, or auth failed. Pick another env or switch to a local pool. |
-| `Local Spark pool "x" did not open port ...` | The Sail server failed to boot — check the pool log (sidebar → *Pool logs*), often a missing `pysail` install or a port conflict. |
+| `SyntaxError: f-string: unmatched '('` at bootstrap | Runner environment older than Python 3.12 with a bootstrap regression — fixed since 0.3.0. |
+| `NameError: dcr_original_isfile` at bootstrap | Fixed since 0.3.0 (definition used before assignment). |
+| `Local Spark pool bootstrap failed: No module named 'pyspark'` | Notebook sessions run in the pool's venv in local mode — start the pool via the sidebar; its env carries pyspark. |
+| `No Delta tables found in <path>` (explorer) | Fixed since 0.5.5 (missing `fs` import). Also check the `[uc-explorer]` diagnostics line in the output channel. |
 | `quay.io ... 401 Unauthorized` when launching the lakehouse stack | Old extension version using MinIO images; update — the stack now uses `filebrowser/filebrowser`. |
-| Sync fails with SDK/auth errors | Verify the `databricksProfile` works (`databricks auth login`), and that the pool is running. |
-| The "open .py as notebook" toggle doesn't change how files open | The toggle writes `workbench.editorAssociations` (workspace settings; falls back to user settings when no folder is open). If a User-level `*.py` association overrides it, remove that entry — workspace should win. Fully restart VS Code after switching. |
+| Named queries say `Database not found` after a pool restart | Expected on old versions — since 0.6.3 the warehouse registry re-registers on-disk tables into every session. |
+| SQL runs but results are missing | Check the Spark Cell Runner output channel — results render there since 0.6.2. |
+| Sync fails with SDK/auth errors | Verify `databricksProfile` works (`databricks auth login`) and the pool is running. |
+| The "open .py as notebook" toggle doesn't change how files open | It writes `workbench.editorAssociations` (workspace, falling back to user scope). Remove any User-level `*.py` association and fully restart. |
+
+## Contributing
+
+Issues and PRs are welcome. Keep in mind:
+
+- Plain CommonJS JavaScript — no build/compile step.
+- Python resources must stay **Python 3.10+ compatible** (no 3.12-only f-string
+  syntax); run `py -3.10 -m py_compile src/python/*.py` before submitting.
+- Generated scripts and templates are validated as real Python — keep it that
+  way in PRs.
+- Bump the version in `package.json` (and the sidebar footer version string)
+  for every user-visible change.
 
 ## License
 

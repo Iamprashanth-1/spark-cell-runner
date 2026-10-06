@@ -2,7 +2,7 @@
   "name": "spark-cell-runner",
   "displayName": "Spark Cell Runner",
   "description": "Run Databricks notebook-source .py cells and SQL in VS Code — against Databricks (Databricks Connect) or fully offline on a local Sail Spark pool, with Unity Catalog sync and a local Delta warehouse.",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "publisher": "PrashanthReddyMunagala",
   "license": "MIT",
   "engines": {
