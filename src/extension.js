@@ -31,6 +31,7 @@ const {
   reopenActivePyForCurrentMode,
 } = require('./navigation');
 const { registerCommands } = require('./commands');
+const { SqlCodeLensProvider } = require('./ui/sqlCodeLens');
 const runner = require('./runner');
 const session = require('./session');
 const pythonEnv = require('./pythonEnv');
@@ -112,6 +113,11 @@ function activate(context) {
     vscode.languages.registerCodeLensProvider(
       [{ language: 'python', scheme: 'file' }, { language: 'python', scheme: 'untitled' }],
       codeLensProvider,
+    ),
+    // Run-on-pool lenses for SQL files (local mode).
+    vscode.languages.registerCodeLensProvider(
+      [{ language: 'sql', scheme: 'file' }, { language: 'sql', scheme: 'untitled' }],
+      new SqlCodeLensProvider(),
     ),
   );
 

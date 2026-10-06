@@ -2,7 +2,7 @@
   "name": "spark-cell-runner",
   "displayName": "Spark Cell Runner",
   "description": "Companion commands for running Databricks notebook-source Python cells from VS Code.",
-  "version": "0.5.6",
+  "version": "0.6.0",
   "publisher": "PrashanthReddyMunagala",
   "license": "MIT",
   "engines": {
@@ -250,6 +250,27 @@
         "title": "Preview Data",
         "icon": "$(open-preview)",
         "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.runSqlFile",
+        "title": "Run SQL File on Pool",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.runSqlSelection",
+        "title": "Run Selected SQL on Pool",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.runSqlRange",
+        "title": "Run Statement on Pool",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.ucExplorer.queryTable",
+        "title": "Query Table",
+        "icon": "$(code)",
+        "category": "Spark Cell Runner"
       }
     ],
     "menus": {
@@ -278,6 +299,16 @@
           "command": "sparkCellRunner.showCellOutput",
           "when": "editorLangId == python && resourceExtname == .py",
           "group": "databricks@5"
+        },
+        {
+          "command": "sparkCellRunner.runSqlFile",
+          "when": "editorLangId == sql",
+          "group": "sql@1"
+        },
+        {
+          "command": "sparkCellRunner.runSqlSelection",
+          "when": "editorLangId == sql",
+          "group": "sql@2"
         }
       ],
       "view/title": [
@@ -342,6 +373,11 @@
           "command": "sparkCellRunner.ucExplorer.previewTable",
           "group": "inline@0",
           "when": "view == sparkCellRunner.unityCatalogView && viewItem == uc-table-local"
+        },
+        {
+          "command": "sparkCellRunner.ucExplorer.queryTable",
+          "group": "inline@2",
+          "when": "view == sparkCellRunner.unityCatalogView && viewItem =~ /^uc-table/"
         }
       ]
     },

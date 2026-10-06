@@ -12,6 +12,7 @@ const session = require('./session');
 const pythonEnv = require('./pythonEnv');
 const poolManager = require('./poolManager');
 const containerManager = require('./containerManager');
+const sqlRunner = require('./sqlRunner');
 const ucSync = require('./ucSync');
 const state = require('./state');
 const decorations = require('./ui/decorations');
@@ -1006,6 +1007,112 @@ function registerCommands(context, output) {
           `Preview failed: ${error instanceof Error ? error.message : String(error)}`
         );
       }
+    }),
+  );
+
+  // ----- SQL execution on the local pool -----
+
+  const runSql = async (sqlText, sourceLabel, options) => {
+    try {
+      await sqlRunner.executeSql(sqlText, sourceLabel, options);
+      refreshDatabricksSidebar();
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        `SQL execution failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  };
+
+  const requireLocalMode = () => {
+    if (getConfiguration().connectionMode !== 'local') {
+      void vscode.window.showInformationMessage(
+        'SQL runs on a local pool. Switch the Connection to "Local pool" first.'
+      );
+      return false;
+    }
+    return true;
+  };
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.runSqlFile', async (uri) => {
+      if (!requireLocalMode()) {
+        return;
+      }
+
+      const targetUri = uri
+        || (vscode.window.activeTextEditor ? vscode.window.activeTextEditor.document.uri : undefined);
+
+      if (!targetUri) {
+        void vscode.window.showInformationMessage('Open a .sql file first.');
+        return;
+      }
+
+      const document = await vscode.workspace.openTextDocument(targetUri);
+      await runSql(document.getText(), `run ${path.basename(targetUri.fsPath)}`);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.runSqlSelection', async () => {
+      if (!requireLocalMode()) {
+        return;
+      }
+
+      const editor = vscode.window.activeTextEditor;
+      if (!editor || editor.document.languageId !== 'sql') {
+        void vscode.window.showInformationMessage('Select some SQL in a .sql file first.');
+        return;
+      }
+
+      const selection = editor.selection;
+      const sqlText = editor.document.getText(selection.isEmpty ? undefined : selection);
+      await runSql(sqlText, 'run selection');
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.runSqlRange', async (uri, startLine) => {
+      if (!requireLocalMode()) {
+        return;
+      }
+
+      const document = uri
+        ? await vscode.workspace.openTextDocument(uri)
+        : (vscode.window.activeTextEditor ? vscode.window.activeTextEditor.document : undefined);
+
+      if (!document) {
+        void vscode.window.showInformationMessage('Open a .sql file first.');
+        return;
+      }
+
+      const statements = sqlRunner.splitStatements(document.getText());
+      const statement = startLine === undefined
+        ? statements[statements.length - 1]
+        : statements.find((entry) => entry.startLine === startLine) || statements[statements.length - 1];
+
+      await runSql(statement.text, `run statement ${statements.indexOf(statement) + 1}`);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.ucExplorer.queryTable', async (item) => {
+      const payload = item && item.payload;
+
+      if (!payload || !payload.copyValue) {
+        return;
+      }
+
+      // Local tables are queried by Delta path (Sail's metastore is
+      // session-scoped); Databricks tables by three-part name.
+      const target = payload.localTableDir
+        ? 'delta.`' + payload.localTableDir.replace(/\\/g, '/') + '`'
+        : payload.copyValue;
+
+      const document = await vscode.workspace.openTextDocument({
+        content: `-- Querying ${payload.copyValue}\n-- Run with the CodeLens above, or right-click → "Run Selected SQL on Pool"\nSELECT *\nFROM ${target}\nLIMIT 100;\n`,
+        language: 'sql',
+      });
+      await vscode.window.showTextDocument(document, { preview: true });
     }),
   );
 
