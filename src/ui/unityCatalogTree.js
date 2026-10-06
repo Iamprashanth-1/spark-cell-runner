@@ -247,6 +247,14 @@ class UnityCatalogTreeProvider {
     const source = resolveSource();
 
     if (!element) {
+      const pool = poolManager.getPool(configuration.localPool);
+      const warehouse = pool ? path.join(poolManager.getWarehouseRoot(), pool.name) : '(no pool selected)';
+      if (this.output) {
+        this.output.appendLine(
+          `[uc-explorer] source=${source}, pool=${pool ? pool.name : 'none'}, poolRunning=${pool ? poolManager.isPoolRunning(pool) : false}, warehouse=${warehouse}, extension=${require('node:path').basename(__dirname, '..')}`
+        );
+      }
+
       if (source === 'local') {
         return this.loadLocalRoot(configuration);
       }
@@ -299,6 +307,10 @@ class UnityCatalogTreeProvider {
     }
 
     const tables = findLocalTables(pool.name);
+
+    if (this.output) {
+      this.output.appendLine(`[uc-explorer] local scan of ${getPoolWarehouse(pool.name)}: ${tables.length} delta table(s)${tables.length ? ' -> ' + tables.map((t) => t.rel).join(', ') : ''}`);
+    }
 
     if (!tables.length) {
       return [
