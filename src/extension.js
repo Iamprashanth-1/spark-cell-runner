@@ -16,7 +16,7 @@
 const vscode = require('vscode');
 const state = require('./state');
 const { getConfiguration, clearConnectValidationCache } = require('./config');
-const { registerDatabricksSidebar } = require('./ui/sidebar');
+const { registerConfigurationTree } = require('./ui/configurationTree');
 const { initStatusBar, updateStatusBar, getActiveDatabricksUri } = require('./ui/statusBar');
 const decorations = require('./ui/decorations');
 const { disposeResultPanel } = require('./ui/resultPanel');
@@ -39,7 +39,7 @@ function activate(context) {
   const output = vscode.window.createOutputChannel('Spark Cell Runner');
   state.output = output;
   context.subscriptions.push(output);
-  state.databricksSidebar = registerDatabricksSidebar(context);
+  state.configurationTree = registerConfigurationTree(context);
   initStatusBar(context);
   decorations.createRunDecorations();
   state.codeLensChangeEmitter = new vscode.EventEmitter();
@@ -88,6 +88,7 @@ function activate(context) {
         clearConnectValidationCache();
         pythonEnv.clearResolvedPythonCommandCache();
         updateStatusBar(getActiveDatabricksUri());
+        refreshDatabricksSidebar();
         if (event.affectsConfiguration('sparkCellRunner.openPyFilesAsNotebook')) {
           void syncPyEditorAssociation().then(() => reopenActivePyForCurrentMode());
         }
@@ -133,8 +134,8 @@ function deactivate() {
 }
 
 function refreshDatabricksSidebar() {
-  if (state.databricksSidebar) {
-    state.databricksSidebar.refresh();
+  if (state.configurationTree) {
+    state.configurationTree.refresh();
   }
 }
 

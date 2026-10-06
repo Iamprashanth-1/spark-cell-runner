@@ -9,10 +9,10 @@ const { resolveCommandParts } = require('./pythonEnv');
 const { getConfiguration } = require('./config');
 const state = require('./state');
 
-function buildSyncArgs(configuration, pool) {
+function buildSyncArgs(configuration, pool, overrides = {}) {
   const args = [
     '--pool', `sc://127.0.0.1:${pool.port}`,
-    '--mode', configuration.syncMode || 'schema',
+    '--mode', overrides.mode || configuration.syncMode || 'schema',
     '--catalog', configuration.syncCatalog || '',
     '--schema', configuration.syncSchema || '',
     '--tables', configuration.syncTables || '',
@@ -23,7 +23,8 @@ function buildSyncArgs(configuration, pool) {
     args.push('--profile', configuration.databricksProfile);
   }
 
-  if (configuration.syncMode === 'data') {
+  const mode = overrides.mode || configuration.syncMode || 'schema';
+  if (mode === 'data') {
     args.push('--databricks-mode', configuration.useServerless ? 'serverless' : 'cluster');
     if (configuration.clusterId) {
       args.push('--cluster-id', configuration.clusterId);
@@ -34,13 +35,15 @@ function buildSyncArgs(configuration, pool) {
 }
 
 // Runs one sync. onProgress(message, done, total) is invoked for each JSON
-// progress line; the final result resolves with { ok, synced, failed, summary }.
-async function runSync(output, onProgress) {
+// progress line; overrides.mode temporarily overrides sparkCellRunner.syncMode
+// for this run without touching the setting. The final result resolves with
+// { ok, synced, failed, summary }.
+async function runSync(output, onProgress, overrides = {}) {
   const configuration = getConfiguration();
   const pool = poolManager.getPool(configuration.localPool);
 
   if (!pool) {
-    throw new Error('No local Spark pool is selected. Create one from the sidebar first.');
+    throw new Error('No local Spark pool is selected. Create one from the Configuration panel first.');
   }
 
   const commandParts = resolveCommandParts(
@@ -56,7 +59,7 @@ async function runSync(output, onProgress) {
   }
 
   const scriptPath = path.join(__dirname, 'python', 'uc_sync.py');
-  const args = buildSyncArgs(configuration, pool);
+  const args = buildSyncArgs(configuration, pool, overrides);
   const result = { ok: false, synced: 0, failed: 0, summary: '', messages: [] };
 
   state.lastSyncResult = { ...result, running: true };

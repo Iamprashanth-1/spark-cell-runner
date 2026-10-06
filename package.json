@@ -2,7 +2,7 @@
   "name": "spark-cell-runner",
   "displayName": "Spark Cell Runner",
   "description": "Companion commands for running Databricks notebook-source Python cells from VS Code.",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "publisher": "PrashanthReddyMunagala",
   "license": "MIT",
   "engines": {
@@ -22,7 +22,7 @@
   ],
   "repository": {
     "type": "git",
-      "url": "https://github.com/Iamprashanth-1/spark-cell-runner.git"
+    "url": "https://github.com/Iamprashanth-1/spark-cell-runner.git"
   },
   "icon": "./media/icon.png",
   "activationEvents": [
@@ -156,6 +156,42 @@
         "command": "sparkCellRunner.openLakehouseConsole",
         "title": "Open Lakehouse MinIO Console",
         "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.setDatabricksProfile",
+        "title": "Set Databricks Profile",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.poolMenu",
+        "title": "Manage Local Spark Pool",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.syncMenu",
+        "title": "Unity Catalog Sync",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.containerMenu",
+        "title": "Lakehouse Container",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.editWidget",
+        "title": "Edit Widget Value",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.toggleOpenPyAsNotebook",
+        "title": "Toggle Open .py as Notebook",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.refreshConfiguration",
+        "title": "Refresh",
+        "icon": "$(refresh)",
+        "category": "Spark Cell Runner"
       }
     ],
     "menus": {
@@ -184,6 +220,13 @@
           "command": "sparkCellRunner.showCellOutput",
           "when": "editorLangId == python && resourceExtname == .py",
           "group": "databricks@5"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "sparkCellRunner.refreshConfiguration",
+          "group": "navigation@1",
+          "when": "view == sparkCellRunner.configurationView"
         }
       ]
     },
@@ -330,14 +373,9 @@
     "views": {
       "sparkCellRunner": [
         {
-          "id": "sparkCellRunner.workspaceView",
-          "name": "Workspace",
-          "type": "webview"
-        },
-        {
-          "id": "sparkCellRunner.settingsView",
-          "name": "Settings",
-          "type": "webview"
+          "id": "sparkCellRunner.configurationView",
+          "name": "Configuration",
+          "type": "tree"
         }
       ]
     }

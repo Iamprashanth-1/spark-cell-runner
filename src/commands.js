@@ -23,8 +23,8 @@ function getActiveDocument() {
 }
 
 function refreshDatabricksSidebar() {
-  if (state.databricksSidebar) {
-    state.databricksSidebar.refresh();
+  if (state.configurationTree) {
+    state.configurationTree.refresh();
   }
 }
 
@@ -548,13 +548,13 @@ function registerCommands(context, output) {
   // ----- Unity Catalog sync -----
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('sparkCellRunner.syncUnityCatalog', async () => {
+    vscode.commands.registerCommand('sparkCellRunner.syncUnityCatalog', async (modeOverride) => {
       const configuration = getConfiguration();
       const pool = poolManager.getPool(configuration.localPool);
 
       if (!pool) {
         void vscode.window.showErrorMessage(
-          'No local Spark pool is selected. Create one from the sidebar before syncing.'
+          'No local Spark pool is selected. Create one from the Configuration panel before syncing.'
         );
         return;
       }
@@ -585,7 +585,7 @@ function registerCommands(context, output) {
           },
           (progress) => ucSync.runSync(state.output, (message) => {
             progress.report({ message: message.length > 60 ? `${message.slice(0, 57)}...` : message });
-          })
+          }, { mode: arguments && arguments[0] })
         );
 
         if (result.ok) {
@@ -675,6 +675,204 @@ function registerCommands(context, output) {
   context.subscriptions.push(
     vscode.commands.registerCommand('sparkCellRunner.openLakehouseConsole', async () => {
       await vscode.env.openExternal(vscode.Uri.parse(`http://localhost:${containerManager.getCachedUiPort()}`));
+    }),
+  );
+
+  // ----- Configuration tree (Databricks-style) helpers -----
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.refreshConfiguration', () => {
+      refreshDatabricksSidebar();
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.setDatabricksProfile', async () => {
+      const current = getConfiguration().databricksProfile;
+      const profile = await vscode.window.showInputBox({
+        title: 'Databricks Profile',
+        prompt: 'Profile name from ~/.databrickscfg used for authentication (empty = default)',
+        value: current,
+        ignoreFocusOut: true,
+      });
+      if (profile === undefined) {
+        return;
+      }
+      await updateWorkspaceSetting('databricksProfile', profile.trim(), getActiveDocument());
+      void vscode.window.showInformationMessage(`Databricks profile set to: ${profile.trim() || '(default)'}`);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.poolMenu', async () => {
+      const configuration = getConfiguration();
+      const pool = poolManager.getPool(configuration.localPool) || poolManager.listPools()[0];
+      const items = [];
+
+      if (pool) {
+        items.push(
+          { label: pool.running ? '$(debug-stop) Stop pool' : '$(debug-start) Start pool', action: pool.running ? 'stop' : 'start' },
+          { label: '$(output) Show pool logs', action: 'logs' },
+          { label: '$(arrow-swap) Switch pool...', action: 'switch' },
+          { label: '$(trash) Delete pool...', action: 'delete' }
+        );
+      }
+      items.push(
+        { label: '$(add) Create new pool...', action: 'create' },
+        { label: '$(cloud-download) Install pysail into a venv...', action: 'install' }
+      );
+
+      const pick = await vscode.window.showQuickPick(items, {
+        title: pool ? `Local Spark pool: ${pool.name}` : 'Local Spark pools',
+        placeHolder: 'Manage the local Sail pool',
+      });
+      if (!pick) {
+        return;
+      }
+
+      switch (pick.action) {
+        case 'start':
+          await vscode.commands.executeCommand('sparkCellRunner.startLocalPool', pool.name);
+          break;
+        case 'stop':
+          await vscode.commands.executeCommand('sparkCellRunner.stopLocalPool', pool.name);
+          break;
+        case 'logs':
+          await vscode.commands.executeCommand('sparkCellRunner.showPoolLogs', pool.name);
+          break;
+        case 'switch': {
+          const pools = poolManager.listPools();
+          const target = await vscode.window.showQuickPick(
+            pools.map((entry) => ({ label: entry.name, description: `port ${entry.port} • ${entry.running ? 'running' : 'stopped'}` })),
+            { title: 'Switch to which pool?' }
+          );
+          if (target) {
+            await updateWorkspaceSetting('localPool', target.label, getActiveDocument());
+            await updateWorkspaceSetting('connectionMode', 'local', getActiveDocument());
+          }
+          break;
+        }
+        case 'delete':
+          await vscode.commands.executeCommand('sparkCellRunner.deleteLocalPool', pool && pool.name);
+          break;
+        case 'create':
+          await vscode.commands.executeCommand('sparkCellRunner.createLocalPool');
+          break;
+        case 'install':
+          await vscode.commands.executeCommand('sparkCellRunner.installLocalPoolPackages');
+          break;
+      }
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.syncMenu', async () => {
+      const pick = await vscode.window.showQuickPick(
+        [
+          { label: '$(cloud-download) Sync now — schema only', mode: 'schema', detail: 'Empty Delta tables with the real column layout; fast, no cluster needed' },
+          { label: '$(cloud-download) Sync now — schema + data', mode: 'data', detail: 'Copies rows through a Databricks session (honors the row limit)' },
+          { label: '$(settings-gear) Edit sync filters...', action: 'filters', detail: 'Catalog, schema, table pattern, row limit' },
+        ],
+        { title: 'Unity Catalog → local pool', placeHolder: 'Mirror dev UC tables for offline development' }
+      );
+      if (!pick) {
+        return;
+      }
+
+      if (pick.action === 'filters') {
+        await vscode.commands.executeCommand('workbench.action.openSettings', 'sparkCellRunner.sync');
+        return;
+      }
+
+      await vscode.commands.executeCommand('sparkCellRunner.syncUnityCatalog', pick.mode);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.containerMenu', async () => {
+      const status = containerManager.getCachedStackStatus();
+      const pick = await vscode.window.showQuickPick(
+        [
+          status && status.running
+            ? { label: '$(debug-stop) Stop container stack', action: 'stop' }
+            : { label: '$(debug-start) Launch container stack', action: 'launch' },
+          { label: '$(browser) Open warehouse UI', action: 'open' },
+          { label: '$(key) Show credentials file', action: 'credentials' },
+        ],
+        { title: 'Lakehouse container (Docker/Podman)', placeHolder: 'Browse the local warehouse in Docker/Podman Desktop' }
+      );
+      if (!pick) {
+        return;
+      }
+
+      switch (pick.action) {
+        case 'launch':
+          await vscode.commands.executeCommand('sparkCellRunner.launchLakehouseContainer');
+          break;
+        case 'stop':
+          await vscode.commands.executeCommand('sparkCellRunner.stopLakehouseContainer');
+          break;
+        case 'open':
+          await vscode.commands.executeCommand('sparkCellRunner.openLakehouseConsole');
+          break;
+        case 'credentials': {
+          const configuration = getConfiguration();
+          const pool = poolManager.getPool(configuration.localPool);
+          if (pool) {
+            const document = await vscode.workspace.openTextDocument(containerManager.getCredentialsFilePath(pool.name));
+            await vscode.window.showTextDocument(document, { preview: true });
+          }
+          break;
+        }
+      }
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.editWidget', async (name, type, choices) => {
+      if (!name) {
+        return;
+      }
+
+      const configuration = getConfiguration();
+      const current = configuration.widgetValues[name];
+
+      let value;
+      if ((type === 'dropdown' || type === 'combobox') && Array.isArray(choices) && choices.length) {
+        const pick = await vscode.window.showQuickPick(
+          choices.map((choice) => ({ label: choice })),
+          { title: `Widget: ${name}`, placeHolder: 'Pick a value' }
+        );
+        value = pick ? pick.label : undefined;
+      } else {
+        value = await vscode.window.showInputBox({
+          title: `Widget: ${name}`,
+          prompt: 'Value passed to dbutils.widgets.get',
+          value: current !== undefined ? String(current) : '',
+          ignoreFocusOut: true,
+        });
+      }
+
+      if (value === undefined) {
+        return;
+      }
+
+      await updateWorkspaceSetting('widgetValues', { ...configuration.widgetValues, [name]: value }, getActiveDocument());
+      void vscode.window.showInformationMessage(`Widget "${name}" set to "${value}".`);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.toggleOpenPyAsNotebook', async () => {
+      const current = Boolean(vscode.workspace.getConfiguration('sparkCellRunner').get('openPyFilesAsNotebook'));
+      await updateWorkspaceSetting('openPyFilesAsNotebook', !current, getActiveDocument());
+      await syncPyEditorAssociation();
+      await reopenActivePyForCurrentMode();
+      void vscode.window.showInformationMessage(
+        !current
+          ? 'Python files will now open as Databricks notebooks.'
+          : 'Python files will now open as plain text.'
+      );
     }),
   );
 }

@@ -392,6 +392,7 @@ module.exports = {
   refreshStackStatus,
   getCachedStackStatus,
   getCachedUiPort,
+  getCredentialsFilePath,
   launchLakehouse,
   stopLakehouse,
   getComposeFilePath,

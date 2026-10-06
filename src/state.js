@@ -7,7 +7,7 @@ const state = {
   output: undefined,
 
   // Sidebar refresh handle returned by registerDatabricksSidebar().
-  databricksSidebar: undefined,
+  configurationTree: undefined,
 
   // Fired whenever run state changes so CodeLens values refresh.
   codeLensChangeEmitter: undefined,
