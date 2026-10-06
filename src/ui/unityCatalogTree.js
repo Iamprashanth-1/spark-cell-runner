@@ -73,30 +73,35 @@ function stripUuidSuffix(name) {
   return name.replace(/-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, '');
 }
 
-// Groups tables by their location: demo.db/orders -> "demo",
-// spark-warehouse/items-uuid -> "spark-warehouse", root-level -> "warehouse root".
+// Maps table locations to schema names the Databricks way, under the local
+// engine catalog ("sail"): demo.db/orders -> "demo",
+// spark-warehouse/items-uuid -> "spark-warehouse", root-level unmanaged
+// tables (session-scoped saveAsTable output) -> "default".
 function groupLocalTables(tables) {
   const groups = new Map();
 
   for (const table of tables) {
     const parts = table.rel.split('/');
-    let group;
+    let schema;
 
     if (parts.length === 1) {
-      group = 'warehouse root';
+      schema = 'default';
+      table.unmanaged = true;
     } else if (parts.length === 2 && parts[0] === 'spark-warehouse') {
-      group = 'spark-warehouse';
+      schema = 'spark-warehouse';
     } else {
-      group = parts[0].replace(/\.db$/i, '');
+      schema = parts[0].replace(/\.db$/i, '');
     }
 
-    if (!groups.has(group)) {
-      groups.set(group, []);
+    if (!groups.has(schema)) {
+      groups.set(schema, []);
     }
-    groups.get(group).push(table);
+    groups.get(schema).push(table);
   }
 
-  return groups;
+  return [...groups.entries()]
+    .map(([schema, schemaTables]) => ({ schema, tables: schemaTables }))
+    .sort((left, right) => left.schema.localeCompare(right.schema));
 }
 
 // The first JSON commit in _delta_log holds the table schema in metaData.
@@ -268,6 +273,10 @@ class UnityCatalogTreeProvider {
 
     const payload = element.payload || {};
 
+    if (payload.localCatalog) {
+      return this.loadLocalSchemas();
+    }
+
     if (payload.localSchema) {
       return this.loadLocalTables(payload.localSchema);
     }
@@ -327,26 +336,54 @@ class UnityCatalogTreeProvider {
       ];
     }
 
-    const groups = groupLocalTables(tables);
+    // Mirror the Databricks hierarchy: catalog -> schema -> table -> columns.
+    return [
+      node('sail', 'catalog', 'local engine catalog', {
+        collapsible: true,
+        icon: 'cloud',
+        payload: { localCatalog: true, copyValue: 'sail' },
+      }),
+    ];
+  }
 
-    // A single group is flattened so tables appear directly at the root —
-    // one less click for the common case.
-    if (groups.size === 1) {
-      const [group, groupTables] = [...groups.entries()][0];
-      return groupTables.map((table) => this.localTableRow(table, group));
+  loadLocalTables(schemaName) {
+    const configuration = getConfiguration();
+    const pool = poolManager.getPool(configuration.localPool);
+
+    if (!pool) {
+      return [errorRow('No local pool selected', 'sparkCellRunner.poolMenu')];
     }
 
-    return [...groups.entries()].map(([group, groupTables]) =>
-      collapsible(
-        group,
-        `${groupTables.length} table${groupTables.length === 1 ? '' : 's'}`,
-        'file-directory',
-        groupTables.map((table) => this.localTableRow(table, group))
-      )
+    const groups = groupLocalTables(findLocalTables(pool.name));
+    const group = groups.find((entry) => entry.schema === schemaName);
+
+    if (!group) {
+      return [node('(no Delta tables)', undefined, undefined, { icon: 'circle-large-outline' })];
+    }
+
+    return group.tables.map((table) => this.localTableRow(table, schemaName));
+  }
+
+  loadLocalSchemas() {
+    const configuration = getConfiguration();
+    const pool = poolManager.getPool(configuration.localPool);
+
+    if (!pool) {
+      return [errorRow('No local pool selected', 'sparkCellRunner.poolMenu')];
+    }
+
+    const groups = groupLocalTables(findLocalTables(pool.name));
+
+    return groups.map(({ schema, tables }) =>
+      node(schema, 'schema', `${tables.length} table${tables.length === 1 ? '' : 's'}${schema === 'default' ? ' • unmanaged' : ''}`, {
+        collapsible: true,
+        icon: 'folder-library',
+        payload: { localSchema: schema, copyValue: `sail.${schema}` },
+      })
     );
   }
 
-  localTableRow(table, group) {
+  localTableRow(table, schema) {
     const rawName = path.basename(table.dir);
     const displayName = stripUuidSuffix(rawName);
     const shortId = rawName === displayName ? '' : rawName.slice(displayName.length + 1, displayName.length + 9);
@@ -356,10 +393,10 @@ class UnityCatalogTreeProvider {
       icon: 'table',
       payload: {
         localTableDir: table.dir,
-        copyValue: table.rel,
+        copyValue: `sail.${schema}.${displayName}`,
       },
       contextValue: 'uc-table-local',
-      tooltip: `${group}/${rawName}\n\nColumns expand below; right-click to copy the path`,
+      tooltip: `sail.${schema}.${displayName}\nDisk location: ${table.rel}\n\nColumns expand below; right-click to copy or preview`,
     });
   }
 
@@ -439,6 +476,10 @@ class UnityCatalogTreeProvider {
     this.cache.set(cacheKey, treeItems);
     return treeItems;
   }
+}
+
+function collapsible(label, description, icon, children) {
+  return node(label, undefined, description, { collapsible: true, icon, children });
 }
 
 function node(label, kind, detail, { collapsible, icon, catalog, schema, table, payload, command } = {}) {
