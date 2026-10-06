@@ -190,32 +190,33 @@ async function runSqlOnPool(sqlText, { limit = 200 } = {}) {
 
 // Renders results into a read-only editor tab.
 async function showSqlResults(results, sourceLabel) {
-  const sections = [
-    `-- Spark Cell Runner: ${sourceLabel}`,
-    `-- ${results.executed} statement(s) executed, ${results.failed} failed`,
-  ];
+  const output = state.output;
+
+  if (!output) {
+    return;
+  }
+
+  output.appendLine('');
+  output.appendLine(`[sql] ${sourceLabel} - ${results.executed} statement(s) executed, ${results.failed} failed`);
 
   for (const statement of results.statements) {
-    sections.push('');
-    sections.push(`-- [${statement.index + 1}] ${statement.sql}`);
+    output.appendLine(`[sql] -- [${statement.index + 1}] ${statement.sql}`);
 
     if (statement.type === 'statement-error') {
-      sections.push(`-- ERROR: ${statement.message}`);
+      output.appendLine(`[sql]    ERROR: ${statement.message}`);
     } else if (statement.csv) {
-      sections.push(`-- ${statement.shown} rows${statement.capped ? ' (reached the limit — may have more)' : ''}`);
-      sections.push(statement.csv.trimEnd());
+      output.appendLine(`[sql]    ${statement.shown} rows${statement.capped ? ' (reached the limit - may have more)' : ''}`);
+      for (const line of statement.csv.trimEnd().split('\n')) {
+        output.appendLine(`[sql]    ${line}`);
+      }
     } else if (statement.shown === 0) {
-      sections.push('-- (0 rows)');
+      output.appendLine('[sql]    (0 rows)');
     } else {
-      sections.push('-- (ok, no result set)');
+      output.appendLine('[sql]    (ok, no result set)');
     }
   }
 
-  const document = await vscode.workspace.openTextDocument({
-    content: sections.join('\n') + '\n',
-    language: 'sql',
-  });
-  await vscode.window.showTextDocument(document, { preview: true });
+  output.show(true);
 }
 
 // Shared entry point for the commands: reads SQL from the source and runs it.
