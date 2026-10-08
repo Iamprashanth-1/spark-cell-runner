@@ -26,3 +26,7 @@ Thumbs.db
 # for the Extension Development Host.
 # Local Spark test runs (spark-warehouse defaults when cwd is wrong)
 spark-warehouse/
+# Maintainer-local docs (not part of the public repo)
+PUBLISHING.md
+LAUNCH.md
+drafts/
