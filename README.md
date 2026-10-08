@@ -6,13 +6,22 @@
 
 **Run Databricks notebook-source files and SQL in VS Code — on Databricks, or fully offline on a local Spark pool.**
 
+*An open source VS Code extension for Databricks engineers who want notebook-grade development — even when the serverless endpoint is unreachable.*
+
 [![Version](https://img.shields.io/badge/version-0.6.5-blue)](package.json)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.86%2B-007ACC?logo=visualstudiocode&logoColor=white)](https://code.visualstudio.com)
 [![Engine](https://img.shields.io/badge/engine-Sail%20%7C%20Databricks-FF3621)](https://github.com/lakehq/sail)
 
-*Persistent per-notebook Python sessions, a Databricks compatibility shim, and a
-local [Sail](https://github.com/lakehq/sail) Spark pool for offline development.*
+<img src="docs/images/hero.png" width="720" alt="Configuration panel and SQL results in the output channel" />
+
+**Try it now — build and install in under a minute:**
+
+```bash
+git clone https://github.com/Iamprashanth-1/spark-cell-runner.git
+cd spark-cell-runner && npm install -g @vscode/vsce
+npx vsce package && code --install-extension spark-cell-runner-0.6.5.vsix
+```
 
 </div>
 
@@ -61,6 +70,45 @@ experience inside VS Code with two interchangeable backends:
 
 Same notebook code, same compatibility shim, either backend.
 
+**How is this different from the official Databricks extension?** The official
+one connects you to a live Databricks workspace and runs cells on cloud
+compute — the right tool for real jobs. Spark Cell Runner speaks the same
+notebook-source format and shims the same `dbutils` APIs, but can run with
+**zero cloud dependencies** on a local Sail pool, sync a slice of Unity
+Catalog down for offline work, and execute ad-hoc SQL against a local Delta
+warehouse. They coexist happily — use both.
+
+## Quick Start
+
+**1. Create and start a local pool** (Configuration panel → Spark Pool → *Create new pool*):
+
+```
+[pool] "local" is serving on sc://127.0.0.1:59921
+```
+
+**2. Open [`examples/01_hello_spark.py`](examples/01_hello_spark.py) and run a cell** — output appears on the cell and in the results panel:
+
+```
+Spark version: 4.2.0
++---+-------+
+| id|squared|
++---+-------+
+|  1|    1.0|
++---+-------+
+```
+
+**3. Open a `.sql` file and press Ctrl+Enter** — results stream into the output channel:
+
+```
+[sql] run selection - 1 statement(s) executed, 0 failed
+[sql]    3 rows
+[sql]    id,label
+[sql]    1,row-1
+```
+
+That's the whole loop: explore tables in the Unity Catalog panel → click
+**Query** → edit → Ctrl+Enter → read results in the output channel.
+
 ## Features
 
 - **Cell-level execution** of Databricks notebook-source `.py` files (and
@@ -83,20 +131,6 @@ Same notebook code, same compatibility shim, either backend.
   browsable UI.
 - **SQL-aware environment picker** — validates the interpreter for the active
   mode (pysail + pyspark locally, databricks-connect in the cloud).
-
-## Quick Start
-
-1. Install the `.vsix` (see [Build and Install](#build-and-install)) and open
-   the **Spark Cell Runner** view in the activity bar.
-2. Pick a Python environment — a venv with `databricks-connect` for cloud
-   mode, or any venv for local mode (the extension offers to install
-   `pysail` + `pyspark-client` into it).
-3. In the **Configuration** panel, choose a connection:
-   - **Databricks** — set your cluster ID or enable serverless (needs a
-     `~/.databrickscfg` profile).
-   - **Local pool** — create a pool, start it, develop offline.
-4. Open any notebook from [`examples/`](examples/README.md) and run cells —
-   or open a `.sql` file and hit **Ctrl+Enter**.
 
 ## Architecture
 

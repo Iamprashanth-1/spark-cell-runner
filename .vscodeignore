@@ -12,3 +12,4 @@ examples/**
 spark-warehouse/
 **/__pycache__/**
 **/*.pyc
+LAUNCH.md
