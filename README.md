@@ -13,6 +13,8 @@
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.86%2B-007ACC?logo=visualstudiocode&logoColor=white)](https://code.visualstudio.com)
 [![Engine](https://img.shields.io/badge/engine-Sail%20%7C%20Databricks-FF3621)](https://github.com/lakehq/sail)
 
+<a href="https://www.producthunt.com/products/spark-cell-runner?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-spark-cell-runner" target="_blank" rel="noopener noreferrer"><img alt="Spark Cell Runner - Run Databricks notebooks offline, right in VS Code | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1273410&amp;theme=light&amp;t=1791441127128"></a>
+
 <img src="docs/images/notebook-run.png" width="880" alt="Spark Cell Runner in VS Code: Configuration panel, Unity Catalog explorer, and a notebook running on the local pool" />
 
 **Try it now — build and install in under a minute:**
