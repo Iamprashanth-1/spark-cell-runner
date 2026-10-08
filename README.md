@@ -13,7 +13,7 @@
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.86%2B-007ACC?logo=visualstudiocode&logoColor=white)](https://code.visualstudio.com)
 [![Engine](https://img.shields.io/badge/engine-Sail%20%7C%20Databricks-FF3621)](https://github.com/lakehq/sail)
 
-<img src="docs/images/hero.png" width="720" alt="Configuration panel and SQL results in the output channel" />
+<img src="docs/images/notebook-run.png" width="880" alt="Spark Cell Runner in VS Code: Configuration panel, Unity Catalog explorer, and a notebook running on the local pool" />
 
 **Try it now — build and install in under a minute:**
 
@@ -230,6 +230,8 @@ manifest in `~/.spark-cell-runner/pools/<name>.json`:
   on-disk Delta tables into every session, so `sail.<schema>.<table>` named
   queries resolve even though Sail's metastore is session-scoped.
 
+<p align="center"><img src="docs/images/configuration.png" width="560" alt="Configuration panel" /></p>
+
 ### Why Sail?
 
 The local pool runs **[Sail](https://github.com/lakehq/sail)** (PyPI package
@@ -263,6 +265,8 @@ sources (switch with the swap button in the view title):
 - **Local warehouse** — reads the pool's Delta files **directly from disk**,
   so it always shows what actually exists, even when the pool is stopped.
 - **Auto** (default) — local when the pool is running, Databricks otherwise.
+
+<p align="center"><img src="docs/images/unity-catalog.png" width="560" alt="Unity Catalog explorer" /></p>
 
 ### Unity Catalog Sync
 
