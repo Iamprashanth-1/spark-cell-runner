@@ -3,7 +3,7 @@
     "*.copilotmd": "vscode.markdown.preview.editor",
     "*.mp4": "vscode.videoPreview",
     "*.ipynb": "jupyter-notebook",
-    "*.py": "databricks-notebook-source"
+    "*.py": "default"
   },
   "sparkCellRunner.openPyFilesAsNotebook": true,
   "sparkCellRunner.connectionMode": "local",
