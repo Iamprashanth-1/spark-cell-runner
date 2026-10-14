@@ -2,7 +2,7 @@
   "name": "spark-cell-runner",
   "displayName": "Spark Cell Runner",
   "description": "Run Databricks notebook-source .py cells and SQL in VS Code — against Databricks (Databricks Connect) or fully offline on a local Sail Spark pool, with Unity Catalog sync and a local Delta warehouse.",
-  "version": "0.6.6",
+  "version": "0.6.7",
   "publisher": "PrashanthReddyMunagala",
   "license": "MIT",
   "engines": {
@@ -160,6 +160,16 @@
       {
         "command": "sparkCellRunner.setDatabricksProfile",
         "title": "Set Databricks Profile",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.createDatabricksProfile",
+        "title": "Create Databricks Profile",
+        "category": "Spark Cell Runner"
+      },
+      {
+        "command": "sparkCellRunner.openDatabricksConfig",
+        "title": "Edit ~/.databrickscfg",
         "category": "Spark Cell Runner"
       },
       {
@@ -422,7 +432,7 @@
           "type": "string",
           "default": "",
           "scope": "resource",
-          "description": "Optional Databricks config profile name to use for authentication, for example DEV or DEFAULT."
+          "description": "Databricks CLI profile from ~/.databrickscfg used for authentication (Databricks Connect runs and Unity Catalog sync). Leave empty for the DEFAULT profile or DATABRICKS_HOST/DATABRICKS_TOKEN env vars. Pick or create profiles via the Configuration panel."
         },
         "sparkCellRunner.clusterId": {
           "type": "string",
@@ -508,7 +518,7 @@
           "type": "boolean",
           "default": false,
           "scope": "resource",
-          "description": "When enabled, .py files are automatically opened in the Databricks notebook view. When disabled, .py files open as plain text."
+          "description": "When enabled, .py files containing Databricks notebook markers (# Databricks notebook source or # COMMAND ----------) open automatically in the notebook view; other .py files stay in the normal editor. When disabled, .py files always open as plain text."
         },
         "sparkCellRunner.ucExplorerSource": {
           "type": "string",

@@ -337,7 +337,7 @@ Generated scripts and result text per workspace go to
 | `pythonCommand` | `python` | Interpreter (path or command) used for sessions, pools, and sync. |
 | `tempFolder` | `.spark-cell-runner` | Workspace folder for generated scripts and results. |
 | `injectDatabricksBootstrap` | `true` | Inject the bootstrap that creates `spark`/`sql`/`dbutils`. |
-| `databricksProfile` | *(empty)* | `~/.databrickscfg` profile for Databricks auth. |
+| `databricksProfile` | *(empty)* | `~/.databrickscfg` profile for Databricks auth. Pick or create profiles from the Configuration panel (mirrors the Databricks extension: lists profiles via `databricks auth profiles`, or create one with OAuth / a PAT). |
 | `clusterId` | *(empty)* | Cluster ID for databricks-connect runs. |
 | `useServerless` | `false` | Use serverless instead of `clusterId`. |
 | `connectionMode` | `databricks` | `databricks` or `local` (Sail pool). |
@@ -346,7 +346,7 @@ Generated scripts and result text per workspace go to
 | `workspacePathMappings` | `{}` | Map `/Workspace/...`-style paths to local folders. |
 | `secretValues` | `{}` | Local replacements for `dbutils.secrets.get`, keyed `scope/key`. |
 | `widgetValues` | `{}` | Values for `dbutils.widgets`, editable in the sidebar. |
-| `openPyFilesAsNotebook` | `false` | Open `.py` files directly in the notebook view. |
+| `openPyFilesAsNotebook` | `false` | Open `.py` files containing Databricks notebook markers (`# Databricks notebook source` or `# COMMAND ----------`) in the notebook view; other `.py` files stay in the normal editor. |
 | `syncCatalog` / `syncSchema` / `syncTables` | *(empty)* | UC sync filters (empty = all). |
 | `syncMode` | `schema` | `schema` or `data`. |
 | `syncRowLimit` | `0` | Max rows per table in data mode (0 = unlimited). |
@@ -364,6 +364,8 @@ All commands live under the **Spark Cell Runner** category:
 | `Restart Notebook Session` | Recycle the persistent Python process. |
 | `Select Python Environment` / `Set Python Path` / `Use Active VS Code Interpreter` | Interpreter management. |
 | `Set Connection Mode` / `Set Cluster ID` / `Toggle Serverless Mode` / `Set Databricks Profile` | Connection targets. |
+| `Create Databricks Profile` | Add a new `~/.databrickscfg` profile via OAuth (`databricks auth login`) or a personal access token. |
+| `Edit ~/.databrickscfg` | Open the Databricks config file for manual profile editing. |
 | `Create / Start / Stop / Delete Local Spark Pool`, `Show Pool Logs`, `Manage Local Spark Pool` | Pool lifecycle. |
 | `Install Local Pool Packages` | Install `pysail` + `pyspark-client` into a venv you pick. |
 | `Run SQL File on Pool` / `Run Selected SQL on Pool` / `Run Statement on Pool` | SQL execution (also Ctrl+Enter in `.sql` files). |

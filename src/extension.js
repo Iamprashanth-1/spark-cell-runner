@@ -29,6 +29,7 @@ const {
   closeConcatTabAndReveal,
   syncPyEditorAssociation,
   reopenActivePyForCurrentMode,
+  autoOpenDatabricksNotebooks,
 } = require('./navigation');
 const { registerCommands } = require('./commands');
 const { SqlCodeLensProvider } = require('./ui/sqlCodeLens');
@@ -48,7 +49,10 @@ function activate(context) {
   state.codeLensChangeEmitter = new vscode.EventEmitter();
   context.subscriptions.push(
     state.codeLensChangeEmitter,
-    vscode.window.onDidChangeVisibleTextEditors(() => decorations.refreshAllRunDecorations()),
+    vscode.window.onDidChangeVisibleTextEditors((editors) => {
+      decorations.refreshAllRunDecorations();
+      void autoOpenDatabricksNotebooks(editors);
+    }),
     vscode.window.onDidChangeActiveTextEditor((editor) => {
       if (editor) {
         void redirectConcatEditorToCell(editor);
@@ -131,6 +135,7 @@ function activate(context) {
   registerCommands(context, output);
 
   void syncPyEditorAssociation();
+  void autoOpenDatabricksNotebooks(vscode.window.visibleTextEditors);
   updateStatusBar(getActiveDatabricksUri());
 }
 
