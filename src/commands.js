@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vscode = require('vscode');
 const { NOTEBOOK_TYPE } = require('./constants');
-const { parseNotebookText, findCellIndexForLine } = require('./parser');
+const { parseNotebookText, findCellIndexForLine, hasDatabricksNotebookMarkers } = require('./parser');
 const { getConfiguration, updateWorkspaceSetting, clearConnectValidationCache } = require('./config');
 const runner = require('./runner');
 const scriptBuilder = require('./scriptBuilder');
@@ -14,6 +14,7 @@ const poolManager = require('./poolManager');
 const containerManager = require('./containerManager');
 const sqlRunner = require('./sqlRunner');
 const ucSync = require('./ucSync');
+const databricksProfiles = require('./databricksProfiles');
 const state = require('./state');
 const decorations = require('./ui/decorations');
 const { showRunResultPanel } = require('./ui/resultPanel');
@@ -154,6 +155,28 @@ function registerCommands(context, output) {
       if (!targetUri) {
         void vscode.window.showInformationMessage('Open a .py file first, then run "Open as Databricks Notebook".');
         return;
+      }
+
+      if (targetUri.scheme === 'file' && /\.py$/i.test(targetUri.fsPath)) {
+        let content = '';
+
+        try {
+          content = fs.readFileSync(targetUri.fsPath, 'utf8');
+        } catch {
+          content = '';
+        }
+
+        if (!hasDatabricksNotebookMarkers(content)) {
+          const proceed = await vscode.window.showWarningMessage(
+            'This file has no Databricks cell markers (# Databricks notebook source or # COMMAND ----------). It will open as a single cell.',
+            { modal: true },
+            'Open anyway'
+          );
+
+          if (proceed !== 'Open anyway') {
+            return;
+          }
+        }
       }
 
       try {
@@ -690,17 +713,62 @@ function registerCommands(context, output) {
   context.subscriptions.push(
     vscode.commands.registerCommand('sparkCellRunner.setDatabricksProfile', async () => {
       const current = getConfiguration().databricksProfile;
-      const profile = await vscode.window.showInputBox({
-        title: 'Databricks Profile',
-        prompt: 'Profile name from ~/.databrickscfg used for authentication (empty = default)',
-        value: current,
-        ignoreFocusOut: true,
-      });
-      if (profile === undefined) {
+      const selection = await databricksProfiles.selectProfile({ current });
+
+      if (!selection) {
         return;
       }
-      await updateWorkspaceSetting('databricksProfile', profile.trim(), getActiveDocument());
-      void vscode.window.showInformationMessage(`Databricks profile set to: ${profile.trim() || '(default)'}`);
+
+      if (selection.action === 'edit') {
+        await databricksProfiles.openDatabricksConfigFile(output);
+        return;
+      }
+
+      if (selection.action === 'create') {
+        const created = await databricksProfiles.createProfile(output);
+
+        if (!created) {
+          return;
+        }
+
+        await updateWorkspaceSetting('databricksProfile', created, getActiveDocument());
+        refreshDatabricksSidebar();
+        void vscode.window.showInformationMessage(`Databricks profile created and set to: ${created}`);
+        return;
+      }
+
+      await updateWorkspaceSetting('databricksProfile', selection.profile, getActiveDocument());
+      refreshDatabricksSidebar();
+      void vscode.window.showInformationMessage(
+        `Databricks profile set to: ${selection.profile || '(default)'}`
+      );
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.createDatabricksProfile', async () => {
+      const created = await databricksProfiles.createProfile(output);
+
+      if (!created) {
+        return;
+      }
+
+      const useIt = await vscode.window.showInformationMessage(
+        `Profile "${created}" created. Set it as the active Databricks profile?`,
+        'Yes',
+        'No'
+      );
+
+      if (useIt === 'Yes') {
+        await updateWorkspaceSetting('databricksProfile', created, getActiveDocument());
+        refreshDatabricksSidebar();
+      }
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sparkCellRunner.openDatabricksConfig', async () => {
+      await databricksProfiles.openDatabricksConfigFile(output);
     }),
   );
 
@@ -871,7 +939,7 @@ function registerCommands(context, output) {
       await reopenActivePyForCurrentMode();
       void vscode.window.showInformationMessage(
         !current
-          ? 'Python files will now open as Databricks notebooks.'
+          ? 'Python files with Databricks notebook markers (# Databricks notebook source / # COMMAND ----------) will now open as Databricks notebooks; others stay in the normal editor.'
           : 'Python files will now open as plain text.'
       );
     }),

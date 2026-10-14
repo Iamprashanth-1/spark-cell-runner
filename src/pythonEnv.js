@@ -667,4 +667,5 @@ module.exports = {
     getCachedConnectValidation,
     createDatabricksChildEnv,
     resolveCommandParts,
+    resolveDatabricksCliPath,
 };

@@ -266,8 +266,32 @@ function escapeForDoubleQuotedPython(value) {
     return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
+// True when a .py file looks like Databricks notebook source: either the
+// "# Databricks notebook source" header as the first non-empty line, or a
+// COMMAND separator anywhere in the file. Used to decide whether a file
+// should open in the notebook view or stay in the plain text editor.
+function hasDatabricksNotebookMarkers(text) {
+    if (!text) {
+        return false;
+    }
+
+    const lines = text.split(/\r?\n/);
+
+    for (const line of lines) {
+        if (line.trim()) {
+            if (line.trim().toLowerCase() === NOTEBOOK_HEADER.toLowerCase()) {
+                return true;
+            }
+            break;
+        }
+    }
+
+    return lines.some((line) => COMMAND_SEPARATOR_REGEX.test(line));
+}
+
 module.exports = {
     parseNotebookText,
+    hasDatabricksNotebookMarkers,
     trimEmptyEdgeLines,
     splitSourceIntoCellChunks,
     stripPaddingBlankLines,

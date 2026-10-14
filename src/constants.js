@@ -4,7 +4,9 @@ const NOTEBOOK_HEADER = '# Databricks notebook source';
 const NOTEBOOK_TYPE = 'databricks-notebook-source';
 const JUPYTER_NOTEBOOK_TYPE = 'jupyter-notebook';
 
-const COMMAND_SEPARATOR_REGEX = /^\s*# COMMAND ----------\s*$/;
+// Accepts the canonical "# COMMAND ----------" separator and the "## COMMAND
+// ----------" double-hash variant seen in some exported notebooks.
+const COMMAND_SEPARATOR_REGEX = /^\s*#{1,2} COMMAND -+\s*$/;
 const MAGIC_PREFIX_REGEX = /^\s*# MAGIC\s?(.*)$/;
 const BARE_MAGIC_REGEX = /^\s*(%\w.*)$/;
 const RUN_MAGIC_REGEX = /^%run\s+(.+)$/;

@@ -5,13 +5,19 @@
 const vscode = require('vscode');
 const path = require('node:path');
 const { NOTEBOOK_TYPE } = require('./constants');
-const { serializeNotebookCellForSource } = require('./parser');
+const { serializeNotebookCellForSource, hasDatabricksNotebookMarkers } = require('./parser');
 const { getConfiguration } = require('./config');
 const state = require('./state');
 
 let notebookNavigationRemapInProgress = false;
 let concatRedirectInProgress = false;
 let pendingCellDefinition;
+
+// URIs already auto-converted to the notebook view this session. The set stops
+// the visible-editors hook from fighting a user who explicitly reopens the
+// file as plain text ("Reopen Editor With..." / toggle off).
+const autoOpenedNotebookUris = new Set();
+const autoOpenInFlightUris = new Set();
 
 // Go to Definition / Find References inside a Databricks notebook cell can resolve to
 // the backing .py file (scheme "file"). Because that file is owned by the notebook
@@ -448,19 +454,20 @@ function remapConcatRangeToCell(cellMap, range) {
     return undefined;
 }
 
-// Control which editor .py files open with via workbench.editorAssociations so VS
-// Code opens them correctly BY DEFAULT. This avoids reopen/flash hacks and, crucially,
-// stops Go to Definition from bouncing through a notebook view when the toggle is off.
+// Which editor .py files open with is decided per file by content (see
+// autoOpenDatabricksNotebooks): files containing Databricks notebook markers
+// open in the notebook view, everything else stays in the normal text editor.
+// The static '*.py' -> notebook association earlier versions wrote is cleaned
+// up here so regular Python files are never forced into the notebook view.
 async function syncPyEditorAssociation() {
-    const desired = getConfiguration().openPyFilesAsNotebook ? NOTEBOOK_TYPE : 'default';
     const workbench = vscode.workspace.getConfiguration('workbench');
     const current = workbench.get('editorAssociations') || {};
 
-    if (current['*.py'] === desired) {
+    if (current['*.py'] !== NOTEBOOK_TYPE) {
         return;
     }
 
-    const next = { ...current, '*.py': desired };
+    const next = { ...current, '*.py': 'default' };
 
     // Prefer workspace scope (project-local behavior); fall back to user
     // scope when there is no folder or the workspace write is not allowed
@@ -491,7 +498,8 @@ async function syncPyEditorAssociation() {
 // just the focused editor, which is undefined while focus sits in a webview
 // (exactly when the user clicks the sidebar toggle). Notebook tabs of our type
 // become plain text editors when the toggle is off, and plain text editors
-// become notebooks when it is on. Dirty tabs are skipped to avoid losing work.
+// become notebooks when it is on — but only those that actually contain
+// Databricks notebook markers. Dirty tabs are skipped to avoid losing work.
 async function reopenActivePyForCurrentMode() {
     const enabled = getConfiguration().openPyFilesAsNotebook;
     const targets = new Map(); // uri -> notebookType (or undefined for text)
@@ -515,15 +523,27 @@ async function reopenActivePyForCurrentMode() {
             const notebookType = input.notebookType;
 
             if (enabled && !notebookType) {
-                targets.set(input.uri.toString(), input.uri); // plain text -> notebook
+                targets.set(input.uri.toString(), input.uri); // plain text -> notebook (markers checked below)
             } else if (!enabled && notebookType === NOTEBOOK_TYPE) {
                 targets.set(input.uri.toString(), input.uri); // notebook -> plain text
             }
         }
     }
 
-    for (const uri of targets.values()) {
+    for (const [key, uri] of targets.entries()) {
         try {
+            if (enabled) {
+                const document = await vscode.workspace.openTextDocument(uri);
+
+                if (!hasDatabricksNotebookMarkers(document.getText())) {
+                    continue;
+                }
+
+                autoOpenedNotebookUris.add(key);
+            } else {
+                autoOpenedNotebookUris.delete(key);
+            }
+
             await vscode.commands.executeCommand(
                 'vscode.openWith',
                 uri,
@@ -537,10 +557,67 @@ async function reopenActivePyForCurrentMode() {
     }
 }
 
+// Content-aware auto-open: when sparkCellRunner.openPyFilesAsNotebook is
+// enabled, .py files that actually contain Databricks notebook markers (the
+// "# Databricks notebook source" header or "# COMMAND ----------" separators)
+// are reopened in the notebook view. Files without markers stay in the normal
+// text editor, so ordinary Python code is never rendered as a notebook.
+function isAutoOpenCandidate(editor) {
+    const document = editor && editor.document;
+
+    if (!document || !document.uri || document.uri.scheme !== 'file') {
+        return false;
+    }
+
+    if (!/\.py$/i.test(document.uri.fsPath) || /\.py\.py$/i.test(document.uri.fsPath)) {
+        return false;
+    }
+
+    return true;
+}
+
+async function autoOpenDatabricksNotebooks(editors) {
+    if (!getConfiguration().openPyFilesAsNotebook) {
+        return;
+    }
+
+    for (const editor of editors || []) {
+        if (!isAutoOpenCandidate(editor)) {
+            continue;
+        }
+
+        const key = editor.document.uri.toString();
+
+        if (autoOpenedNotebookUris.has(key) || autoOpenInFlightUris.has(key)) {
+            continue;
+        }
+
+        if (!hasDatabricksNotebookMarkers(editor.document.getText())) {
+            continue;
+        }
+
+        autoOpenInFlightUris.add(key);
+
+        try {
+            autoOpenedNotebookUris.add(key);
+            await vscode.commands.executeCommand('vscode.openWith', editor.document.uri, NOTEBOOK_TYPE);
+        } catch (error) {
+            autoOpenedNotebookUris.delete(key);
+
+            if (state.output) {
+                state.output.appendLine(`[nav] auto-open notebook failed for ${key}: ${error && error.message}`);
+            }
+        } finally {
+            autoOpenInFlightUris.delete(key);
+        }
+    }
+}
+
 module.exports = {
   DatabricksNotebookNavigationProvider,
   redirectConcatEditorToCell,
   closeConcatTabAndReveal,
   syncPyEditorAssociation,
   reopenActivePyForCurrentMode,
+  autoOpenDatabricksNotebooks,
 };
