@@ -1,14 +1,16 @@
 name: Publish VS Code extension
 
-# Publishes to the Marketplace on tags like v0.6.7 (the package.json version),
-# or on demand. Requires the VSCE_PAT repository secret (Marketplace PAT with
+# Publishes to the Marketplace on semver tags like v0.7.0, or on demand.
+# Requires the VSCE_PAT repository secret (Marketplace PAT with
 # Marketplace > Manage scope — see PUBLISHING.md section 3).
+# Note: the same tag also triggers the PyPI workflow (release-pypi.yml),
+# so one release tag publishes the extension and the Python package together.
 
 on:
   workflow_dispatch:
   push:
     tags:
-      - 'v*'
+      - 'v*.*.*'
 
 jobs:
   publish:
