@@ -11,6 +11,7 @@ Databricks notebook-source `.py` files you can open with the extension
 | `03_dbutils_and_widgets.py` | `dbutils.widgets`, `dbutils.fs`, `display()`, secrets placeholders | Local pool and Databricks |
 | `04_uc_sync_query.py` | Querying tables synced from Unity Catalog | Local pool (after a UC sync) |
 | `05_notebook_with_run.py` + `05_shared_utils.py` | `%run` notebook includes and shared functions | Local pool and Databricks |
+| `06_local_iceberg.py` | Writing and querying native **Apache Iceberg** tables in the local warehouse (pysail 0.4+) | Local pool |
 
 ## Running locally
 

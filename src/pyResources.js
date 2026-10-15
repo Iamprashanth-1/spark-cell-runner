@@ -1,6 +1,7 @@
 // Loads the Python source templates that used to be hardcoded as JS string
-// arrays in extension.js. The templates live in src/python/ so they can be
-// read and edited as real Python files.
+// arrays in extension.js. The templates live in the python/spark_cell_runner
+// package (the same files that publish to PyPI) so they can be read and edited
+// as real Python files.
 
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -9,11 +10,15 @@ const poolManager = require('./poolManager');
 
 const resourceCache = new Map();
 
+function getPackageDir() {
+  return path.join(__dirname, '..', 'python', 'spark_cell_runner');
+}
+
 async function loadPythonResource(fileName) {
   let cached = resourceCache.get(fileName);
 
   if (!cached) {
-    const filePath = path.join(__dirname, 'python', fileName);
+    const filePath = path.join(getPackageDir(), fileName);
     cached = await fs.readFile(filePath, 'utf8');
     resourceCache.set(fileName, cached);
   }
@@ -24,7 +29,7 @@ async function loadPythonResource(fileName) {
 // Absolute path of the long-lived session driver script spawned with
 // `python -u session_driver.py`; it speaks the JSON exec protocol over stdio.
 function getSessionDriverPath() {
-  return path.join(__dirname, 'python', 'session_driver.py');
+  return path.join(getPackageDir(), 'session_driver.py');
 }
 
 // Returns the bootstrap source with the connection block filled in for the

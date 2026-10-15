@@ -13,30 +13,45 @@ const { getConfiguration } = require('../config');
 const { resolveCommandParts } = require('../pythonEnv');
 const state = require('../state');
 
-const EXPLORER_SCRIPT = path.join(__dirname, '..', 'python', 'uc_explore.py');
+const EXPLORER_SCRIPT = path.join(__dirname, '..', '..', 'python', 'spark_cell_runner', 'uc_explore.py');
 
 // ---------------------------------------------------------------------------
-// Local warehouse exploration reads the DELTA FILES ON DISK. Sail's metastore
+// Local warehouse exploration reads the TABLE FILES ON DISK. Sail's metastore
 // is session-scoped (tables created in one session vanish from the catalog in
-// the next), but the Delta files are durable — and they are exactly what the
-// lakehouse container browses. No pool connection is needed.
+// the next), but the table files are durable — and they are exactly what the
+// lakehouse container browses. No pool connection is needed. Both open table
+// formats Sail supports are recognized: Delta (_delta_log) and Iceberg
+// (metadata/*.metadata.json).
 
 function getPoolWarehouse(poolName) {
   return path.join(poolManager.getWarehouseRoot(), poolName);
 }
 
-// A directory is a Delta table when it contains a _delta_log folder.
-function isDeltaTableDir(dirPath) {
+// Classifies a directory as a local table: 'delta', 'iceberg', or null.
+function detectTableFormat(dirPath) {
   try {
-    return fs.existsSync(path.join(dirPath, '_delta_log'));
+    if (fs.existsSync(path.join(dirPath, '_delta_log'))) {
+      return 'delta';
+    }
+
+    const metadataDir = path.join(dirPath, 'metadata');
+
+    if (
+      fs.existsSync(metadataDir) &&
+      fs.readdirSync(metadataDir).some((name) => name.endsWith('.metadata.json'))
+    ) {
+      return 'iceberg';
+    }
   } catch {
-    return false;
+    return null;
   }
+
+  return null;
 }
 
 // Sail names managed tables unpredictably (e.g. "orders-f731c9ab-..." at the
-// warehouse root), so we scan the whole warehouse for Delta tables and group
-// them by location instead of assuming a schema-folder layout.
+// warehouse root), so we scan the whole warehouse for table directories and
+// group them by location instead of assuming a schema-folder layout.
 function findLocalTables(poolName) {
   const root = getPoolWarehouse(poolName);
   const tables = [];
@@ -55,9 +70,10 @@ function findLocalTables(poolName) {
       }
 
       const child = path.join(dirPath, entry.name);
+      const format = detectTableFormat(child);
 
-      if (isDeltaTableDir(child)) {
-        tables.push({ dir: child, rel: path.relative(root, child).replace(/\\/g, '/') });
+      if (format) {
+        tables.push({ dir: child, rel: path.relative(root, child).replace(/\\/g, '/'), format });
       } else if (depth < 4) {
         walk(child, depth + 1);
       }
@@ -104,7 +120,16 @@ function groupLocalTables(tables) {
     .sort((left, right) => left.schema.localeCompare(right.schema));
 }
 
-// The first JSON commit in _delta_log holds the table schema in metaData.
+// Column listing per format. Delta: the first JSON commit in _delta_log holds
+// the table schema in metaData. Iceberg: the newest metadata JSON holds the
+// schema list with a current-schema-id pointer.
+function readTableColumns(tableDir, format) {
+  if (format === 'iceberg') {
+    return readIcebergColumns(tableDir);
+  }
+  return readDeltaColumns(tableDir);
+}
+
 function readDeltaColumns(tableDir) {
   try {
     const logs = fs
@@ -125,6 +150,50 @@ function readDeltaColumns(tableDir) {
         return (schema.fields || []).map((field) => ({
           name: field.name,
           detail: field.type && field.type.name ? field.type.name : field.type,
+        }));
+      }
+    }
+  } catch {
+    // Fall through to the empty listing below.
+  }
+
+  return [];
+}
+
+// Iceberg nested types serialize as objects; primitives as short strings.
+function icebergTypeDetail(type) {
+  if (typeof type === 'string') {
+    return type;
+  }
+  if (type && typeof type === 'object') {
+    return type.type || 'unknown';
+  }
+  return 'unknown';
+}
+
+function readIcebergColumns(tableDir) {
+  try {
+    const metadataFiles = fs
+      .readdirSync(path.join(tableDir, 'metadata'))
+      .filter((name) => name.endsWith('.metadata.json'))
+      .sort((left, right) => {
+        const version = (name) => Number((name.match(/^v(\d+)\./) || [])[1] || 0);
+        return version(left) - version(right);
+      });
+
+    for (const fileName of metadataFiles.reverse()) {
+      const metadata = JSON.parse(
+        fs.readFileSync(path.join(tableDir, 'metadata', fileName), 'utf8')
+      );
+
+      const schema = (metadata.schemas || []).find(
+        (entry) => entry['schema-id'] === metadata['current-schema-id']
+      ) || (metadata.schemas || [])[0];
+
+      if (schema && Array.isArray(schema.fields)) {
+        return schema.fields.map((field) => ({
+          name: field.name,
+          detail: icebergTypeDetail(field.type),
         }));
       }
     }
@@ -282,7 +351,7 @@ class UnityCatalogTreeProvider {
     }
 
     if (payload.localTableDir) {
-      return readDeltaColumns(payload.localTableDir).map((column) =>
+      return readTableColumns(payload.localTableDir, payload.localTableFormat).map((column) =>
         node(column.name, 'column', column.detail, {
           icon: 'symbol-field',
           payload: { copyValue: column.name },
@@ -319,13 +388,13 @@ class UnityCatalogTreeProvider {
     const tables = findLocalTables(pool.name);
 
     if (this.output) {
-      this.output.appendLine(`[uc-explorer] local scan of ${getPoolWarehouse(pool.name)}: ${tables.length} delta table(s)${tables.length ? ' -> ' + tables.map((t) => t.rel).join(', ') : ''}`);
+      this.output.appendLine(`[uc-explorer] local scan of ${getPoolWarehouse(pool.name)}: ${tables.length} table(s)${tables.length ? ' -> ' + tables.map((t) => t.rel).join(', ') : ''}`);
     }
 
     if (!tables.length) {
       return [
         errorRow(
-          `No Delta tables found in ${getPoolWarehouse(pool.name)} — run examples/02, then click here to refresh`,
+          `No Delta or Iceberg tables found in ${getPoolWarehouse(pool.name)} — run examples/02 or 06, then click here to refresh`,
           'sparkCellRunner.ucExplorer.refresh'
         ),
         node('Open warehouse folder', undefined, undefined, {
@@ -358,7 +427,7 @@ class UnityCatalogTreeProvider {
     const group = groups.find((entry) => entry.schema === schemaName);
 
     if (!group) {
-      return [node('(no Delta tables)', undefined, undefined, { icon: 'circle-large-outline' })];
+      return [node('(no tables)', undefined, undefined, { icon: 'circle-large-outline' })];
     }
 
     return group.tables.map((table) => this.localTableRow(table, schemaName));
@@ -387,16 +456,18 @@ class UnityCatalogTreeProvider {
     const rawName = path.basename(table.dir);
     const displayName = stripUuidSuffix(rawName);
     const shortId = rawName === displayName ? '' : rawName.slice(displayName.length + 1, displayName.length + 9);
+    const format = table.format || 'delta';
 
-    return node(displayName, 'table', `delta${shortId ? ' • ' + shortId : ''}`, {
+    return node(displayName, 'table', `${format}${shortId ? ' • ' + shortId : ''}`, {
       collapsible: true,
       icon: 'table',
       payload: {
         localTableDir: table.dir,
+        localTableFormat: format,
         copyValue: `sail.${schema}.${displayName}`,
       },
       contextValue: 'uc-table-local',
-      tooltip: `sail.${schema}.${displayName}\nDisk location: ${table.rel}\n\nColumns expand below; right-click to copy or preview`,
+      tooltip: `sail.${schema}.${displayName}\nFormat: ${format}\nDisk location: ${table.rel}\n\nColumns expand below; right-click to copy or preview`,
     });
   }
 

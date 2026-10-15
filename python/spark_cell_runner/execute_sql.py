@@ -21,8 +21,11 @@ import json
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from warehouse_registry import register_warehouse_tables
+try:
+    from spark_cell_runner.warehouse_registry import register_warehouse_tables
+except ImportError:  # vendored flat layout inside the VSIX
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from warehouse_registry import register_warehouse_tables
 
 
 def emit(payload):

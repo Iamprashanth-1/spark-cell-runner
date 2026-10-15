@@ -1,4 +1,5 @@
-// Unity Catalog -> local pool sync orchestration. Spawns src/python/uc_sync.py
+// Unity Catalog -> local pool sync orchestration. Spawns the uc_sync.py module
+// from python/spark_cell_runner/
 // as a one-shot process and parses its JSON progress lines. Sync results are
 // kept in shared state so the sidebar can render the last sync summary.
 
@@ -17,6 +18,7 @@ function buildSyncArgs(configuration, pool, overrides = {}) {
     '--schema', overrides.schema !== undefined ? overrides.schema : configuration.syncSchema || '',
     '--tables', overrides.tables !== undefined ? overrides.tables : configuration.syncTables || '',
     '--limit', String(configuration.syncRowLimit || 0),
+    '--format', overrides.format || configuration.syncFormat || 'delta',
   ];
 
   if (configuration.databricksProfile) {
@@ -58,7 +60,7 @@ async function runSync(output, onProgress, overrides = {}) {
     throw new Error(`Local Spark pool "${pool.name}" is not running. Start it before syncing.`);
   }
 
-  const scriptPath = path.join(__dirname, 'python', 'uc_sync.py');
+  const scriptPath = path.join(__dirname, '..', 'python', 'spark_cell_runner', 'uc_sync.py');
   const args = buildSyncArgs(configuration, pool, overrides);
   const result = { ok: false, synced: 0, failed: 0, summary: '', messages: [] };
 

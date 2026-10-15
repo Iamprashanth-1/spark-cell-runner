@@ -7,11 +7,14 @@ state). Reads Unity Catalog metadata over REST via the Databricks SDK and
 recreates matching schemas/tables on the local Sail pool over Spark Connect.
 
 Two modes:
-  schema  Recreate empty Delta tables with identical columns/types (default,
+  schema  Recreate empty tables with identical columns/types (default,
           fast, no data movement, no cluster needed).
   data    Additionally copy table contents: Databricks session reads the
-          remote table, the local pool writes it as Delta. Requires
+          remote table, the local pool writes it locally. Requires
           databricks-connect (or full pyspark + credentials) in this env.
+
+The local table format is chosen with --format (delta or iceberg; default
+delta). Both are written natively by the Sail pool.
 
 Progress is streamed to stdout as JSON lines:
   {"type": "progress", "message": "...", "done": n, "total": m}
@@ -88,7 +91,7 @@ def unique_schemas(targets):
     return result
 
 
-def sync_schema_only(local, w, catalog, schema, table, table_info):
+def sync_schema_only(local, w, catalog, schema, table, table_info, table_format):
     columns = getattr(table_info, 'columns', None) or []
     if not columns:
         return 'no columns returned; skipped'
@@ -96,7 +99,10 @@ def sync_schema_only(local, w, catalog, schema, table, table_info):
     defs = ', '.join(f'{q(col.name)} {col.type_text}' for col in columns if col.name)
     comment = getattr(table_info, 'comment', None)
     suffix = f" COMMENT '{comment}'" if comment else ''
-    local.sql(f'CREATE TABLE IF NOT EXISTS {full_name(catalog, schema, table)} ({defs}) USING DELTA{suffix}')
+    local.sql(
+        f'CREATE TABLE IF NOT EXISTS {full_name(catalog, schema, table)} '
+        f'({defs}) USING {table_format.upper()}{suffix}'
+    )
     return None
 
 
@@ -112,14 +118,14 @@ def connect_databricks(args):
     )
 
 
-def sync_data(local, remote, catalog, schema, table, limit):
+def sync_data(local, remote, catalog, schema, table, limit, table_format):
     df = remote.table(f'{catalog}.{schema}.{table}')
     if limit > 0:
         df = df.limit(limit)
     pdf = df.toPandas()
     if pdf.empty:
         return 'remote table is empty; created schema only'
-    local.createDataFrame(pdf).write.mode('overwrite').format('delta').saveAsTable(
+    local.createDataFrame(pdf).write.mode('overwrite').format(table_format).saveAsTable(
         full_name(catalog, schema, table)
     )
     return None
@@ -133,6 +139,8 @@ def main():
     parser.add_argument('--catalog', default='')
     parser.add_argument('--schema', default='')
     parser.add_argument('--tables', default='', help='glob pattern for table names, e.g. dim_*')
+    parser.add_argument('--format', choices=['delta', 'iceberg'], default='delta',
+                        help='local table format written by the sync (Sail supports both natively)')
     parser.add_argument('--limit', type=int, default=0, help='data mode: max rows per table, 0 = all')
     parser.add_argument('--databricks-mode', choices=['serverless', 'cluster'], default='serverless')
     parser.add_argument('--cluster-id', default='')
@@ -206,9 +214,9 @@ def main():
         try:
             if args.mode == 'schema':
                 info = w.tables.get(full_name(catalog, schema, table))
-                skip_reason = sync_schema_only(local, w, catalog, schema, table, info)
+                skip_reason = sync_schema_only(local, w, catalog, schema, table, info, args.format)
             else:
-                skip_reason = sync_data(local, remote, catalog, schema, table, args.limit)
+                skip_reason = sync_data(local, remote, catalog, schema, table, args.limit, args.format)
 
             if skip_reason:
                 emit({"type": "progress", "message": f"  {label}: {skip_reason}"})
@@ -224,7 +232,7 @@ def main():
         "ok": True,
         "synced": synced,
         "failed": failed,
-        "summary": f"{synced}/{total} tables synced ({args.mode} mode) in {seconds}s"
+        "summary": f"{synced}/{total} tables synced ({args.mode} mode, {args.format}) in {seconds}s"
                    + (f", {failed} failed" if failed else ''),
     })
     return 0
