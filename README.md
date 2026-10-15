@@ -549,9 +549,10 @@ npx vsce login PrashanthReddyMunagala   # paste your Marketplace PAT once
 npx vsce publish patch                  # bumps the version, packages, publishes
 ```
 
-Or push a `v*` tag (e.g. `v0.6.8`) or run the "Publish VS Code extension"
-workflow — CI packages, publishes, and attaches the `.vsix` to a GitHub
-release (`.github/workflows/release-vscode.yml`, needs the `VSCE_PAT` secret).
+Or push a semver tag (e.g. `v0.7.0`) — CI packages, publishes, and attaches
+the `.vsix` to a GitHub release (`.github/workflows/release-vscode.yml`,
+needs the `VSCE_PAT` secret). The same tag also publishes the Python package
+to PyPI via Trusted Publishing, so one tag releases both.
 
 ## Publishing to PyPI
 
@@ -567,9 +568,9 @@ twine check dist/*
 twine upload dist/*            # needs a PyPI token (see python/README.md)
 ```
 
-Or let CI do it: push a `python-v*` tag (e.g. `python-v0.7.0`) or run the
-"Publish Python package" workflow — it tests, builds, and uploads
-(`.github/workflows/release-pypi.yml`, needs the `PYPI_API_TOKEN` secret).
+Or let CI do it: push a semver tag (e.g. `v0.7.0`) — Trusted Publishing
+authenticates the workflow via OIDC, no token secret needed
+(`.github/workflows/release-pypi.yml`).
 
 Bump the version in **both** `python/spark_cell_runner/__init__.py` and
 `python/pyproject.toml` (keep them equal); the extension's own version stays
