@@ -9,7 +9,7 @@
 //   session.js       — persistent per-notebook Python session processes
 //   runner.js        — cell execution orchestration and notebook controllers
 //   pythonEnv.js     — interpreter discovery and Databricks Connect validation
-//   pyResources.js   — loads the Python bootstrap/runtime templates in src/python
+//   pyResources.js   — loads the Python bootstrap/runtime templates in python/spark_cell_runner
 //   commands.js      — command registrations
 //   ui/              — sidebar, status bar, decorations, results panel
 

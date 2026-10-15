@@ -27,6 +27,6 @@ Databricks notebook view.
 
 **What needs a reload:** changes to the extension's JavaScript (`src/**/*.js`)
 only take effect after the Extension Development Host reloads — press
-**Ctrl+R** in that window, or stop and re-run F5. Changes to `src/python/*.py`
+**Ctrl+R** in that window, or stop and re-run F5. Changes to `python/spark_cell_runner/*.py`
 templates are re-read on the next run (session restart recommended: run
 "Databricks Cell Runner: Restart Databricks Notebook Session").

@@ -13,3 +13,14 @@ spark-warehouse/
 **/__pycache__/**
 **/*.pyc
 LAUNCH.md
+
+# Python packaging artifacts (the PyPI build) and its tests
+python/tests/**
+python/dist/**
+python/build/**
+python/*.egg-info/**
+python/**/spark_cell_runner.egg-info/**
+python/README.md
+drafts/**
+.zcode/**
+.github/**

@@ -1027,7 +1027,7 @@ function registerCommands(context, output) {
       const commandParts = pythonEnv.resolveCommandParts(
         poolManager.resolveSessionPythonCommand(configuration.pythonCommand, configuration)
       );
-      const scriptPath = path.join(__dirname, 'python', 'preview_table.py');
+      const scriptPath = path.join(__dirname, '..', 'python', 'spark_cell_runner', 'preview_table.py');
 
       try {
         const csvText = await vscode.window.withProgress(
@@ -1193,10 +1193,10 @@ function registerCommands(context, output) {
 
       // Named queries (sail.schema.table) resolve because the extension
       // re-registers on-disk warehouse tables into every session it starts.
-      // The Delta path is kept as a comment fallback.
+      // The path-based read is kept as a comment fallback (format-aware).
       const named = payload.copyValue;
       const fallback = payload.localTableDir
-        ? '-- fallback: SELECT * FROM delta.`' + payload.localTableDir.replace(/\\/g, '/') + '` LIMIT 100;'
+        ? '-- fallback: SELECT * FROM ' + (payload.localTableFormat || 'delta') + '.`' + payload.localTableDir.replace(/\\/g, '/') + '` LIMIT 100;'
         : undefined;
 
       const document = await vscode.workspace.openTextDocument({

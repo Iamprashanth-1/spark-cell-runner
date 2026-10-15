@@ -1,5 +1,5 @@
 // SQL runner: executes .sql files or selections against the active local pool
-// via src/python/execute_sql.py (SQL text over stdin, JSON lines back), and
+// via python/spark_cell_runner/execute_sql.py (SQL text over stdin, JSON lines back), and
 // renders per-statement results into a read-only editor tab.
 
 const path = require('node:path');
@@ -127,7 +127,7 @@ async function runSqlOnPool(sqlText, { limit = 200 } = {}) {
   const commandParts = resolveCommandParts(
     poolManager.resolveSessionPythonCommand(configuration.pythonCommand, configuration)
   );
-  const scriptPath = path.join(__dirname, 'python', 'execute_sql.py');
+  const scriptPath = path.join(__dirname, '..', 'python', 'spark_cell_runner', 'execute_sql.py');
 
   return new Promise((resolve, reject) => {
     const child = require('node:child_process').spawn(

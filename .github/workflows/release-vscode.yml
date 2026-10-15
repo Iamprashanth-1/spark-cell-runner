@@ -1,0 +1,40 @@
+name: Publish VS Code extension
+
+# Publishes to the Marketplace on tags like v0.6.7 (the package.json version),
+# or on demand. Requires the VSCE_PAT repository secret (Marketplace PAT with
+# Marketplace > Manage scope — see PUBLISHING.md section 3).
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Package the extension
+        run: npx vsce package
+
+      - name: Publish to the Marketplace
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx vsce publish
+
+      - name: Attach the .vsix to a GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: '*.vsix'
+          generate_release_notes: true

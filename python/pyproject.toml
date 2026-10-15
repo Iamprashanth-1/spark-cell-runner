@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spark-cell-runner"
+version = "0.7.0"
+description = "Run Databricks notebook-source .py cells and SQL against Databricks (Databricks Connect) or a local Sail Spark pool, with Unity Catalog sync and a local Delta / Iceberg warehouse."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Iamprashanth-1" }]
+keywords = [
+  "databricks",
+  "notebook",
+  "pyspark",
+  "spark",
+  "sail",
+  "unity-catalog",
+  "delta-lake",
+  "iceberg",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+  "pysail>=0.4",
+  "pyspark-client",
+  "databricks-sdk",
+]
+
+[project.optional-dependencies]
+databricks = ["databricks-connect"]
+dev = ["pytest"]
+
+[project.scripts]
+spark-cell-runner = "spark_cell_runner.cli:main"
+
+[tool.setuptools]
+packages = ["spark_cell_runner"]

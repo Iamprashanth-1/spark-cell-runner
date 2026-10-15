@@ -1,5 +1,5 @@
 // Long-lived per-notebook Python sessions. Each session is a spawned python
-// process running src/python/session_driver.py, which executes submitted code
+// process running python/spark_cell_runner/session_driver.py, which executes submitted code
 // blocks over a JSON line protocol on stdio so state persists across cells
 // (Jupyter-like) without re-importing or reconnecting every run.
 

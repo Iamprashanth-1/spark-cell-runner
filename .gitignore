@@ -10,6 +10,7 @@ test/preview/
 # Extension runtime output (generated scripts/results in dev workspaces)
 .spark-cell-runner/
 
+.zcode/
 # Python
 __pycache__/
 *.py[cod]
@@ -30,3 +31,11 @@ spark-warehouse/
 PUBLISHING.md
 LAUNCH.md
 drafts/
+
+# Python packaging artifacts
+python/dist/
+python/build/
+python/*.egg-info/
+python/**/spark_cell_runner.egg-info/
+__pycache__/
+*.pyc

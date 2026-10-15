@@ -2,7 +2,7 @@
   "name": "spark-cell-runner",
   "displayName": "Spark Cell Runner",
   "description": "Run Databricks notebook-source .py cells and SQL in VS Code — against Databricks (Databricks Connect) or fully offline on a local Sail Spark pool, with Unity Catalog sync and a local Delta warehouse.",
-  "version": "0.6.7",
+  "version": "0.7.0",
   "publisher": "PrashanthReddyMunagala",
   "license": "MIT",
   "engines": {
@@ -488,7 +488,17 @@
           ],
           "default": "schema",
           "scope": "resource",
-          "description": "Unity Catalog sync: 'schema' recreates empty Delta tables with matching columns; 'data' also copies table contents through a Databricks session."
+          "description": "Unity Catalog sync: 'schema' recreates empty tables with matching columns; 'data' also copies table contents through a Databricks session."
+        },
+        "sparkCellRunner.syncFormat": {
+          "type": "string",
+          "enum": [
+            "delta",
+            "iceberg"
+          ],
+          "default": "delta",
+          "scope": "resource",
+          "description": "Unity Catalog sync: local table format written into the warehouse. Both Delta and Iceberg are written natively by the Sail pool (pysail 0.4+)."
         },
         "sparkCellRunner.syncRowLimit": {
           "type": "number",
