@@ -8,7 +8,7 @@
 
 *An open source VS Code extension for Databricks engineers who want notebook-grade development — even when the serverless endpoint is unreachable.*
 
-[![Version](https://img.shields.io/badge/version-0.6.5-blue)](package.json)
+[![Version](https://img.shields.io/badge/version-0.7.0-blue)](package.json)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![VS Code](https://img.shields.io/badge/VS%20Code-1.86%2B-007ACC?logo=visualstudiocode&logoColor=white)](https://code.visualstudio.com)
 [![Engine](https://img.shields.io/badge/engine-Sail%20%7C%20Databricks-FF3621)](https://github.com/lakehq/sail)
@@ -22,7 +22,7 @@
 ```bash
 git clone https://github.com/Iamprashanth-1/spark-cell-runner.git
 cd spark-cell-runner && npm install -g @vscode/vsce
-npx vsce package && code --install-extension spark-cell-runner-0.6.5.vsix
+npx vsce package && code --install-extension spark-cell-runner-0.7.0.vsix
 ```
 
 </div>
@@ -511,14 +511,14 @@ Requires Node.js and the [vsce](https://github.com/microsoft/vscode-vsce) CLI:
 
 ```bash
 npm install -g @vscode/vsce
-npm run package        # produces spark-cell-runner-0.6.5.vsix
+npm run package        # produces spark-cell-runner-0.7.0.vsix
 ```
 
 Install (uninstall older versions first so cached assets refresh):
 
 ```bash
 code --uninstall-extension PrashanthReddyMunagala.spark-cell-runner
-code --install-extension spark-cell-runner-0.6.5.vsix
+code --install-extension spark-cell-runner-0.7.0.vsix
 ```
 
 Then fully quit and restart VS Code. To uninstall:
@@ -549,6 +549,10 @@ npx vsce login PrashanthReddyMunagala   # paste your Marketplace PAT once
 npx vsce publish patch                  # bumps the version, packages, publishes
 ```
 
+Or push a `v*` tag (e.g. `v0.6.8`) or run the "Publish VS Code extension"
+workflow — CI packages, publishes, and attaches the `.vsix` to a GitHub
+release (`.github/workflows/release-vscode.yml`, needs the `VSCE_PAT` secret).
+
 ## Publishing to PyPI
 
 The Python package lives in `python/` with its own `pyproject.toml`
@@ -562,6 +566,10 @@ python -m build                # sdist + wheel into python/dist/
 twine check dist/*
 twine upload dist/*            # needs a PyPI token (see python/README.md)
 ```
+
+Or let CI do it: push a `python-v*` tag (e.g. `python-v0.7.0`) or run the
+"Publish Python package" workflow — it tests, builds, and uploads
+(`.github/workflows/release-pypi.yml`, needs the `PYPI_API_TOKEN` secret).
 
 Bump the version in **both** `python/spark_cell_runner/__init__.py` and
 `python/pyproject.toml` (keep them equal); the extension's own version stays

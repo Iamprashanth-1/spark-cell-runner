@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  extension:
+    name: Extension (vsce package)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Syntax-check changed extension sources
+        run: |
+          for file in src/*.js src/ui/*.js; do
+            node --check "$file"
+          done
+
+      # Packaging fails on leaks (e.g. __pycache__, egg-info) and validates
+      # the .vscodeignore contract; the .vsix itself is discarded here.
+      - name: Package the extension
+        run: npx vsce package
+
+  python:
+    name: Python engine (pytest)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # The full engine deps (pysail, pyspark-client, databricks-sdk) are
+      # installed so imports inside the modules resolve the way they do for
+      # real users; only the pure test modules run (no Spark server needed).
+      - name: Install package with dev extras
+        run: python -m pip install -e "python[dev]"
+
+      - name: Byte-compile all modules (syntax floor)
+        run: python -m compileall python/spark_cell_runner
+
+      - name: Run tests
+        run: python -m pytest python/tests -q
