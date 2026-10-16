@@ -6,6 +6,8 @@ pip-installable twin of the VS Code extension: runs Databricks notebook-source
 Spark pool, with Unity Catalog sync and a local Delta / Iceberg warehouse.
 Pools, warehouses, and profiles are shared with the extension.
 
+`scr` is a short alias for the same CLI (`scr pool create dev` etc.).
+
 Examples:
   spark-cell-runner pool create dev && spark-cell-runner pool start dev
   spark-cell-runner run notebook.py --pool dev
@@ -265,8 +267,12 @@ def cmd_preview(args):
 
 
 def build_arg_parser():
+    # Show whichever name the user invoked: `scr --help` reads better than
+    # `spark-cell-runner --help` when the alias is the entry point.
+    invoked_name = os.path.basename(sys.argv[0]) if sys.argv else 'spark-cell-runner'
+
     parser = argparse.ArgumentParser(
-        prog='spark-cell-runner',
+        prog=invoked_name if invoked_name in ('scr', 'spark-cell-runner') else 'spark-cell-runner',
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

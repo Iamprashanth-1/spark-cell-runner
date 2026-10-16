@@ -11,14 +11,17 @@ pools, warehouses, and Databricks profiles are shared between the two.
 pip install spark-cell-runner
 ```
 
+The command is also installed as the short alias **`scr`** — same CLI, five
+fewer characters: `scr pool create dev`.
+
 ## Quickstart
 
 ```bash
 # 1. Create and start a local pool (offline engine, ~1s startup, no JVM)
-spark-cell-runner pool create dev
-spark-cell-runner pool start dev
+scr pool create dev
+scr pool start dev
 
-# 2. Run a Databricks notebook export, cell by cell
+# 2. Run a Databricks notebook export, cell by cell (scr ... works everywhere)
 spark-cell-runner run my_notebook.py --pool dev
 
 # 3. Run SQL

@@ -44,6 +44,7 @@ dev = ["pytest"]
 
 [project.scripts]
 spark-cell-runner = "spark_cell_runner.cli:main"
+scr = "spark_cell_runner.cli:main"
 
 [tool.setuptools]
 packages = ["spark_cell_runner"]
