@@ -489,6 +489,8 @@ extension spawns, published to PyPI as
 pip install spark-cell-runner
 ```
 
+The CLI is also installed as the short alias **`scr`** (`scr pool create dev`).
+
 ```bash
 spark-cell-runner pool create dev && spark-cell-runner pool start dev
 spark-cell-runner run my_notebook.py --pool dev
