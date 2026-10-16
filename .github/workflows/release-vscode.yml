@@ -15,6 +15,10 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      # Creating the GitHub release (and its generated notes) needs write
+      # access; the default token is read-only without this.
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
