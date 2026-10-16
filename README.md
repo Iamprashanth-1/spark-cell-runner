@@ -541,44 +541,6 @@ Then fully quit and restart VS Code. To uninstall:
   `python -m compileall python/spark_cell_runner`.
 - See [PUBLISHING.md](PUBLISHING.md) for the Marketplace release flow.
 
-## Publishing to the Marketplace
-
-One-time setup (publisher, PAT) and the per-release flow are documented in
-[PUBLISHING.md](PUBLISHING.md). In short:
-
-```bash
-npx vsce login PrashanthReddyMunagala   # paste your Marketplace PAT once
-npx vsce publish patch                  # bumps the version, packages, publishes
-```
-
-Or push a semver tag (e.g. `v0.7.0`) — CI packages, publishes, and attaches
-the `.vsix` to a GitHub release (`.github/workflows/release-vscode.yml`,
-needs the `VSCE_PAT` secret). The same tag also publishes the Python package
-to PyPI via Trusted Publishing, so one tag releases both.
-
-## Publishing to PyPI
-
-The Python package lives in `python/` with its own `pyproject.toml`
-(single source of truth with the VSIX: the extension ships the same
-`python/spark_cell_runner/` files inside itself).
-
-```bash
-cd python
-python -m pip install --upgrade build twine
-python -m build                # sdist + wheel into python/dist/
-twine check dist/*
-twine upload dist/*            # needs a PyPI token (see python/README.md)
-```
-
-Or let CI do it: push a semver tag (e.g. `v0.7.0`) — Trusted Publishing
-authenticates the workflow via OIDC, no token secret needed
-(`.github/workflows/release-pypi.yml`).
-
-Bump the version in **both** `python/spark_cell_runner/__init__.py` and
-`python/pyproject.toml` (keep them equal); the extension's own version stays
-in `package.json`.
-
-
 ## Troubleshooting
 
 | Symptom | Cause / fix |
