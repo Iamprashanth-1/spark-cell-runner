@@ -4,12 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spark-cell-runner"
-version = "0.7.0"
+version = "0.7.1"
 description = "Run Databricks notebook-source .py cells and SQL against Databricks (Databricks Connect) or a local Sail Spark pool, with Unity Catalog sync and a local Delta / Iceberg warehouse."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
-authors = [{ name = "Iamprashanth-1" }]
+authors = [
+    {name = "Prashanth Reddy"},
+]
 keywords = [
   "databricks",
   "notebook",

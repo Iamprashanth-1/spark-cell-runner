@@ -7,4 +7,4 @@ ships these same modules and spawns them by path; this package is the
 pip-installable CLI form.
 """
 
-__version__ = "0.7.0"
+__version__ = "0.7.1"
